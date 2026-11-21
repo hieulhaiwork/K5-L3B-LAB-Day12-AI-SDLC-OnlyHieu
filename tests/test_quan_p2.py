@@ -23,7 +23,7 @@ class QuanPhase2(unittest.TestCase):
     def test_standard_restaurant_and_daily_ingredient_totals(self):
         contract = load_contract()
         tuning = contract["tuning"]
-        self.assertEqual(contract["contract_version"], "1.2")
+        self.assertEqual(contract["contract_version"], "1.3")
         self.assertEqual({s["id"]: s["pos"] for s in tuning["quan"]["stoves"]}, {"B1": [2, 8], "B2": [5, 8]})
         self.assertEqual({t["id"]: t["pos"] for t in tuning["quan"]["tables"]},
                          {"T1": [9, 2], "T2": [13, 2], "T3": [9, 6], "T4": [13, 6]})
