@@ -48,7 +48,7 @@ class QuanPhase1(unittest.TestCase):
             rows = read_jsonl(outputs[0])
             self.assertEqual([(r["tick"], r["name"]) for r in events(rows)], [
                 (120, "customer_arrived"), (121, "cook_started"), (481, "dish_ready"), (481, "dish_picked"),
-                (621, "served"), (1221, "paid"), (1221, "quan_end"),
+                (621, "served"), (1020, "no_dish"), (1221, "paid"), (1221, "quan_end"),
             ])
             order_fields = {"order_id": "C1", "table_id": "T1", "dish_id": DISH}
             stove_fields = {"stove_id": "B1", "order_id": "C1", "dish_id": DISH}
@@ -58,6 +58,7 @@ class QuanPhase1(unittest.TestCase):
                 stove_fields,
                 stove_fields,
                 dict(order_fields, patience_ticks_left=3099, base_price=60, tip=12),
+                {},  # Bàn trống thứ hai của preset P2 xét lượt khách khi T1 vẫn đang có khách.
                 {"order_id": "C1", "table_id": "T1", "base_price": 60, "tip": 12,
                  "amount": 72, "reason": "finished_eating"},
                 {"reason": "time", "money": 72, "earned": 72, "shift_earned": 72, "reputation": 3.2},
@@ -78,7 +79,6 @@ class QuanPhase1(unittest.TestCase):
 
     def test_reserved_stock_is_reused_after_waiting_customer_leaves(self):
         tuning = load_contract()["tuning"]
-        tuning["quan"]["tables"].append({"id": "T2", "pos": [10, 2]})
         tuning["quan"].update(first_customer_tick=1, customer_interval_s=0.1)
         scenario = {"stock": {"ca_loc": 1}, "customers": [order("C9", patience_ticks_left=7)]}
         session = Session("quan", tuning, scenario, seed=1)
@@ -170,9 +170,8 @@ class QuanPhase1(unittest.TestCase):
 
     def test_stove_uses_order_tick_then_table_id_and_lists_items_sorted(self):
         tuning = load_contract()["tuning"]
-        tuning["quan"]["tables"].extend([{"id": "T10", "pos": [12, 2]}, {"id": "T2", "pos": [10, 2]}])
         scenario = {"player": {"pos": [2, 8]}, "stock": {"ca_loc": 2, "ca_linh": 3, "bong_dien_dien": 1},
-                    "customers": [order("C1", "T1", order_tick=10), order("C2", "T10", order_tick=2),
+                    "customers": [order("C1", "T1", order_tick=10), order("C2", "T4", order_tick=2),
                                   order("C9", "T2", order_tick=2, dish_id=SOUP)]}
         session = Session("quan", tuning, scenario, seed=1)
         cooked, = session.step(PRESS)

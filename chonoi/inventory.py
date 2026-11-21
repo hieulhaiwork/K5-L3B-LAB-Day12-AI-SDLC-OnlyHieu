@@ -1,4 +1,4 @@
-"""File kho v1.0 (Contract G): {"items": {id: số nguyên >= 0}}.
+"""File kho (Contract G): {"items": {id: số nguyên >= 0}}.
 
 Đọc: từ chối sai schema / id lạ / số âm (BadInput -> mã 2).
 Ghi: bỏ mục bằng 0, qua file tạm cùng thư mục rồi thay thế, byte-ổn-định.
@@ -11,6 +11,10 @@ import tempfile
 from .errors import BadInput
 
 KINDS_P1 = ("ca_loc", "ca_linh", "bong_dien_dien", "bong_sung")
+
+
+def ingredient_kinds(tuning):
+    return {kind for dish in tuning["menu"].values() for kind in dish["recipe"]}
 
 
 def validate_items(items, kinds=KINDS_P1):
