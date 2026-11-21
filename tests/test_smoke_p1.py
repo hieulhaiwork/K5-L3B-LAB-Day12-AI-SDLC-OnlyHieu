@@ -218,6 +218,49 @@ class Integration(unittest.TestCase):
             self.assertEqual(code, 0, err)
             self.assertEqual(snapshots(read_jsonl(w.path("q.jsonl")))[0]["stock"], {"bong_sung": 2, "ca_loc": 1})
 
+    def test_caught_fish_is_cooked_and_paid_in_quan(self):
+        with Workdir() as w:
+            gather_scenario = write_json(w.path("gather.json"), {"gather": {
+                "player": {"pos": [30, 10]}, "time_left_ticks": 1,
+                "fish": [{"id": "F2", "kind": "ca_loc", "pos": [30, 10]}],
+            }})
+            gather_inputs = write_json(w.path("gather-inputs.json"), frames({"tick": 0, "catch": True}))
+            inventory, gather_out = w.path("catch.json"), w.path("gather.jsonl")
+            code, err = run_headless("--mode", "gather", "--seed", "42", "--ticks", "1", "--out", gather_out,
+                                     "--scenario", gather_scenario, "--inputs", gather_inputs,
+                                     "--inventory-out", inventory)
+            self.assertEqual(code, 0, err)
+            caught = read_jsonl(gather_out)
+            self.assertEqual(snapshots(caught)[0]["hold"], [])
+            self.assertEqual([r["name"] for r in events(caught)], ["fish_caught", "gather_end"])
+            with open(inventory, encoding="utf-8") as f:
+                self.assertEqual(json.load(f), {"items": {"ca_loc": 1}})
+
+            # Preset PRD-0: B1 tại [2,8], T1 tại [9,2]; một cá lóc chỉ nấu được một món.
+            quan_scenario = write_json(w.path("quan.json"), {"quan": {
+                "player": {"pos": [2, 8]}, "time_left_ticks": 1221,
+            }})
+            quan_inputs = write_json(w.path("quan-inputs.json"), frames(
+                {"tick": 120, "interact": True},
+                {"tick": 121, "interact": False},
+                {"tick": 480, "interact": True},
+                {"tick": 481, "interact": False, "move": [1, -6 / 7]},
+                {"tick": 619, "move": [0, 0]},
+                {"tick": 620, "interact": True},
+            ))
+            quan_out = w.path("quan.jsonl")
+            code, err = run_headless("--mode", "quan", "--seed", "42", "--ticks", "1221", "--out", quan_out,
+                                     "--scenario", quan_scenario, "--inputs", quan_inputs, "--inventory", inventory)
+            self.assertEqual(code, 0, err)
+            rows = read_jsonl(quan_out)
+            self.assertEqual(snapshots(rows)[0]["stock"], {"ca_loc": 1})
+            self.assertEqual([r["name"] for r in events(rows)], [
+                "customer_arrived", "cook_started", "dish_ready", "dish_picked", "served", "paid", "quan_end",
+            ])
+            self.assertEqual(events(rows, "cook_started")[0]["data"]["items"], ["ca_loc"])
+            self.assertEqual(snapshots(rows)[-1]["stock"], {})
+            self.assertEqual((rows[-1]["reason"], rows[-1]["earned"], rows[-1]["score"]), ("time", 72, 372))
+
     def test_inv_01_not_written_when_tick_limit_first(self):
         with Workdir() as w:
             inv = w.path("inv.json")
