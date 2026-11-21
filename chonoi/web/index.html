@@ -176,6 +176,47 @@ function drawGather(w, h) {
     ctx.restore();
     text(f.id, sx(f.pos[0]), sy(f.pos[1]) - 0.7 * s, { size: 10, align: "center", color: "rgba(255,255,255,.8)" });
   });
+  // Cá Sấu Năm Chèo (M1, M2)
+  (snap.monsters || []).forEach((m) => {
+    const x = sx(m.pos[0]);
+    const y = sy(m.pos[1]);
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Thân cá sấu: màu thay đổi theo trạng thái
+    ctx.fillStyle = m.state === "chase"
+      ? "#e74c3c"
+      : m.state === "recoil"
+        ? "#f39c12"
+        : "#247a45";
+
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 1.4 * s, 0.5 * s, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Đuôi
+    ctx.beginPath();
+    ctx.moveTo(-1.1 * s, 0);
+    ctx.lineTo(-2.1 * s, -0.4 * s);
+    ctx.lineTo(-2.1 * s, 0.4 * s);
+    ctx.fill();
+
+    // Mắt
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(0.8 * s, -0.2 * s, 0.13 * s, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    text(
+      `${m.id} (${m.state})`,
+      x,
+      y - 0.9 * s,
+      { size: 12, align: "center", color: "#ffffff" }
+    );
+  });
   // người chơi
   const p = snap.player;
   if (p) {
