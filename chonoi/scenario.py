@@ -7,7 +7,7 @@ import json
 import math
 
 from .errors import BadInput
-from .inventory import KINDS_P1, validate_items
+from .inventory import ingredient_kinds, validate_items
 
 GATHER_KEYS = {"player", "hold", "nodes", "fish", "random_fish", "time_left_ticks"}
 GATHER_PLAYER_KEYS = {"pos", "vel", "heading_deg", "hp", "oxygen_ticks", "zero_oxy_ticks",
@@ -96,7 +96,8 @@ def _validate_gather(b, tuning):
         raise BadInput("random_fish phải là boolean")
     if "hold" in b:
         h = b["hold"]
-        if not isinstance(h, list) or any(k not in KINDS_P1 for k in h):
+        kinds = ingredient_kinds(tuning)
+        if not isinstance(h, list) or any(not isinstance(k, str) or k not in kinds for k in h):
             raise BadInput("hold phải là mảng id nguyên liệu hợp lệ")
         if len(h) > g["hold_capacity"]:
             raise BadInput("hold vượt sức chứa")
@@ -154,7 +155,7 @@ def _validate_quan(b, tuning):
                 if extra:
                     raise BadInput(f"{name}.{entity['id']}: trường lạ {sorted(extra)}")
     if "stock" in b:
-        validate_items(b["stock"])
+        validate_items(b["stock"], ingredient_kinds(tuning))
     p = b.get("player", {})
     if not isinstance(p, dict) or set(p) - QUAN_PLAYER_KEYS:
         raise BadInput("quan.player chỉ có pos và vel")
@@ -170,10 +171,3 @@ def _validate_quan(b, tuning):
                 raise BadInput(f"{name}.{fixture['id']}: không có trong tuning")
             if "pos" in fixture:
                 _pos(f"{name}.{fixture['id']}.pos", fixture["pos"], qb, axes=("x", "z"))
-    table_ids = [c.get("table_id") for c in b.get("customers", [])]
-    known = {t["id"] for t in tuning["quan"]["tables"]}
-    for c in b.get("customers", []):
-        if not isinstance(c.get("table_id"), str) or c["table_id"] not in known:
-            raise BadInput(f"customers.{c['id']}: table_id phải là bàn có thật")
-    if len(table_ids) != len(set(table_ids)):
-        raise BadInput("hai khách cùng bàn")

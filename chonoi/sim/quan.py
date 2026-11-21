@@ -1,11 +1,12 @@
-"""Buổi tối — Mở Quán (Phase 1)."""
+"""Buổi tối — Mở Quán. Ca độc lập dùng toàn bộ menu, ca trong day dùng kế hoạch ngày."""
 
 import math
 from decimal import Decimal
 
+from ..day_plan import normalize_day_plan
 from ..errors import BadInput
 from ..ids import id_key, sort_by_id
-from ..inventory import validate_items
+from ..inventory import ingredient_kinds, validate_items
 from .ramp import ramp_velocity
 
 
@@ -13,10 +14,17 @@ class QuanSim:
     mode = "quan"
     phase = "quan"
 
-    def __init__(self, tuning, scenario, streams, ids, inventory=None):
+    def __init__(self, tuning, scenario, streams, ids, inventory=None, *,
+                 day_plan=None, money=0, earned=0, reputation=None):
         t = tuning["quan"]
         self.t = t
         self.menu = tuning["menu"]
+        self.ingredient_kinds = ingredient_kinds(tuning)
+        if day_plan is not None:
+            if "stock" in scenario or "reputation" in scenario:
+                raise BadInput("day nhận kho và uy tín từ ca trước")
+            dishes = normalize_day_plan(day_plan, self.menu)["dishes"]
+            self.menu = {dish_id: self.menu[dish_id] for dish_id in dishes}
         self.ids = ids
         self.orders_rng = streams.get("customer_order")
         self.tick_hz = tuning["tick_hz"]
@@ -31,10 +39,11 @@ class QuanSim:
         self._tgt = None
         self._ramp_left = 0
         # kho: --inventory HOẶC scenario.stock (cả hai -> cli đã báo mã 2)
-        self.stock = validate_items(inventory if inventory is not None else scenario.get("stock", {}))
+        source_stock = inventory if inventory is not None else scenario.get("stock", {})
+        self.stock = validate_items(source_stock, self.ingredient_kinds)
         self.hand = None
         self.time_left_ticks = scenario.get("time_left_ticks", self._ticks(t["duration_s"]))
-        self.reputation = scenario.get("reputation", t["reputation_initial"])
+        self.reputation = scenario.get("reputation", t["reputation_initial"] if reputation is None else reputation)
         self.random_customers = scenario.get("random_customers", True)
         if not isinstance(self.random_customers, bool):
             raise BadInput("quan.random_customers phải là boolean")
@@ -46,8 +55,10 @@ class QuanSim:
         self.customers = {}
         self._load_customers(scenario.get("customers", []))
         self._load_dishes(scenario.get("hand"))
-        self.money = 0
-        self.earned = 0
+        if type(money) is not int or type(earned) is not int or not 0 <= money <= earned:
+            raise BadInput("đầu ca cần 0 <= money <= earned, cả hai là số nguyên")
+        self.money = money
+        self.earned = earned
         self.shift_earned = 0
         self.done = False
         self.reason = None
@@ -71,8 +82,17 @@ class QuanSim:
         return value
 
     def _load_customers(self, customers):
+        tables = {table["id"] for table in self.tables}
+        occupied = set()
         for source in customers:
             customer = dict(source)
+            customer_id = customer.get("id")
+            if not isinstance(customer_id, str) or not customer_id or customer_id in self.customers:
+                raise BadInput("mỗi khách cần id duy nhất")
+            table_id = customer.get("table_id")
+            if not isinstance(table_id, str) or table_id not in tables or table_id in occupied:
+                raise BadInput(f"customers.{customer['id']}: cần bàn trống có thật")
+            occupied.add(table_id)
             dish = customer.get("dish_id")
             state = customer.get("state", "waiting")
             status = customer.get("order_status", "reserved")
@@ -92,13 +112,13 @@ class QuanSim:
             if state == "eating" or tip is not None:
                 self._nonnegative_int(tip, "tip")
             customer.update(base_price=base_price, tip=tip)
-            self.customers[customer["id"]] = customer
-            self.ids.reserve(customer["id"])
+            self.customers[customer_id] = customer
+            self.ids.reserve(customer_id)
 
         available = self.stock.copy()
         for customer in sorted(self.customers.values(), key=self._order_priority):
             recipe = self.menu[customer["dish_id"]]["recipe"] if customer["order_status"] == "reserved" else {}
-            if "reserved" in customer and validate_items(customer["reserved"]) != recipe:
+            if "reserved" in customer and validate_items(customer["reserved"], self.ingredient_kinds) != recipe:
                 raise BadInput(f"customers.{customer['id']}: giữ chỗ không khớp trạng thái và công thức")
             for kind, amount in recipe.items():
                 if available.get(kind, 0) < amount:

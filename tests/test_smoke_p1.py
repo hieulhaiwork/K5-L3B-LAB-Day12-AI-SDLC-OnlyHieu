@@ -236,7 +236,7 @@ class Integration(unittest.TestCase):
             with open(inventory, encoding="utf-8") as f:
                 self.assertEqual(json.load(f), {"items": {"ca_loc": 1}})
 
-            # Preset PRD-0: B1 tại [2,8], T1 tại [9,2]; một cá lóc chỉ nấu được một món.
+            # B1 tại [2,8], T1 tại [9,2]. Một cá lóc chỉ nấu được một món.
             quan_scenario = write_json(w.path("quan.json"), {"quan": {
                 "player": {"pos": [2, 8]}, "time_left_ticks": 1221,
             }})
@@ -255,8 +255,9 @@ class Integration(unittest.TestCase):
             rows = read_jsonl(quan_out)
             self.assertEqual(snapshots(rows)[0]["stock"], {"ca_loc": 1})
             self.assertEqual([r["name"] for r in events(rows)], [
-                "customer_arrived", "cook_started", "dish_ready", "dish_picked", "served", "paid", "quan_end",
+                "customer_arrived", "cook_started", "dish_ready", "dish_picked", "served", "no_dish", "paid", "quan_end",
             ])
+            self.assertEqual(events(rows, "no_dish")[0]["tick"], 1020)
             self.assertEqual(events(rows, "cook_started")[0]["data"]["items"], ["ca_loc"])
             self.assertEqual(snapshots(rows)[-1]["stock"], {})
             self.assertEqual((rows[-1]["reason"], rows[-1]["earned"], rows[-1]["score"]), ("time", 72, 372))

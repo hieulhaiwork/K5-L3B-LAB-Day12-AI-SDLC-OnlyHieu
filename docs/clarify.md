@@ -1,5 +1,13 @@
 # Clarify — câu hỏi và câu trả lời (PO ghi, cả nhóm dùng chung)
 
+## Phase 2
+
+| # | Ngày giờ | Câu hỏi | Trả lời / giả định | Ai quyết |
+|---|---|---|---|---|
+| P2-quán | 2026-11-21 | Quán có dừng bán một món khi đã vượt số suất trong kế hoạch ngày không? | Số suất chỉ tính nguyên liệu cần lấy. Khách được gọi bất kỳ món nào có trong kế hoạch nếu đủ kho khả dụng. Ca độc lập dùng cả sáu món. | TICKET-02 mục 2 |
+
+## Phase 1
+
 | # | Ngày giờ | Câu hỏi | Trả lời / giả định | Ai quyết |
 |---|---|---|---|---|
 | 1 | 2026-11-21 | PRD-0 mục D–F quy định sự kiện và trường của đơn, món trên bếp/tay thế nào? | `state` là `waiting` hoặc `eating`. `order_status` là `reserved`, `assigned`, `unfulfillable` hoặc `served`. Payload món có `order_id`, `dish_id`, `base_price`. Sự kiện dùng các trường ở mục E. | PRD-0 D–E |

@@ -1,8 +1,9 @@
-"""Đọc game.contract.json và kiểm dải hợp lệ của tuning P1 (PRD mục 13.2, Test Contract)."""
+"""Đọc game.contract.json, kiểm tuning, công thức và kế hoạch ngày."""
 
 import json
 import os
 
+from .day_plan import normalize_day_plan
 from .errors import BadInput
 
 DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "game.contract.json")
@@ -138,6 +139,16 @@ def validate_tuning(t):
         raise BadInput("burn_s phải là null ở Phase 1")
     # TODO(nhóm): bổ sung kiểm các khóa còn lại nếu muốn chặt hơn (bếp/bàn, uy tín, ...).
     for dish_id, d in menu.items():
+        if not isinstance(d, dict):
+            raise BadInput(f"menu.{dish_id} phải là object")
+        recipe = d.get("recipe")
         price, cook = d.get("price"), d.get("cook_s")
+        if (not isinstance(recipe, dict) or not recipe
+                or any(type(amount) is not int or amount <= 0 for amount in recipe.values())):
+            raise BadInput(f"menu.{dish_id}.recipe phải chứa số lượng nguyên dương")
         if isinstance(price, bool) or not isinstance(price, int) or price <= 0 or not _num(cook) or cook <= 0:
             raise BadInput(f"menu.{dish_id}: price (nguyên) và cook_s phải > 0")
+    if "day_plan" in t:
+        plans = t["day_plan"]
+        if not isinstance(plans, list) or [normalize_day_plan(p, menu)["day"] for p in plans] != list(range(1, 6)):
+            raise BadInput("tuning.day_plan phải khai lần lượt Ngày 1 đến Ngày 5")
