@@ -20,11 +20,14 @@ Nhóm viết tiếp (đúng thứ tự một bước trong PRD mục 13.8, "Gath
 Các tính năng của phase sau chưa nằm trong khung này.
 """
 
+from asyncio import events
 import math
+from fractions import Fraction
 
 from ..ids import id_key, sort_by_id
 from ..inventory import hold_to_items
 from .ramp import ramp_velocity
+from chonoi import ids
 
 # TICK = 60.0
 AXES = ("x", "d")
@@ -93,7 +96,20 @@ class GatherSim:
             "catch_cd_ticks", 0
         )
 
-        self.hold = list(scenario.get("hold", []))
+        self.freshness = tuning["freshness"]
+        # Giữ thứ tự nhặt; mỗi item là một dict độc lập.
+        self.hold = [
+            dict(item)
+            for item in scenario.get("hold", [])
+        ]
+
+        # Lưu độ tươi chính xác để so ngưỡng 30.
+        # Không lưu Fraction trực tiếp vào JSONL.
+        self._fresh_exact = {
+            item["id"]: Fraction(str(item["fresh"]))
+            for item in self.hold
+        }
+
         self.time_left_ticks = scenario.get(
             "time_left_ticks",
             round(self.t["duration_s"] * self.hz),
@@ -164,6 +180,9 @@ class GatherSim:
         ):
             for entity in collection:
                 ids.reserve(entity["id"])
+
+            for item in self.hold:
+                ids.reserve(item["id"])
         
         self.money = 0
         self.earned = 0
@@ -188,8 +207,12 @@ class GatherSim:
             if option["level"] == level
         )
     
-    def inventory_items(self) -> dict:
-        return hold_to_items(self.hold)
+    def inventory_items(self) -> list:
+        """Danh sách cá thể dùng khi bàn giao kho."""
+        return [
+            dict(item)
+            for item in sort_by_id(self.hold)
+        ]
 
     def snapshot(self):
         return {
@@ -206,7 +229,9 @@ class GatherSim:
                 "catch_cd_ticks": self.catch_cd_ticks,
                 "at_surface": self._at_surface(),
             },
-            "hold": list(self.hold),
+            "hold": [
+                dict(item) for item in self.hold
+            ],
             "hold_count": len(self.hold),
             "hold_capacity": self.t["hold_capacity"],
             "nodes": [
@@ -277,6 +302,8 @@ class GatherSim:
                     ))
         
         # 2. Player movement and oxygen.
+        # Phase 3: hao tươi ở đầu bước, trước khi di chuyển.
+        self._age_hold(events)
         was_surface = self._at_surface()
         self._move(inp)
         at_surface = self._at_surface()
@@ -356,9 +383,10 @@ class GatherSim:
                             },
                         ))
                     else:
-                        self.hold.extend(
-                            [node["kind"]] * amount
-                        )
+                        for _ in range(amount):
+                            self.hold.append(
+                                self._new_item(node["kind"])
+                            )
                         node["regrow_ticks"] = round(
                             self.t["regrow_s"] * self.hz
                         )
@@ -398,9 +426,10 @@ class GatherSim:
                         },
                     ))
                 else:
-                    self.hold.extend(
-                        [fish["kind"]] * amount
-                    )
+                    for _ in range(amount):
+                        self.hold.append(
+                            self._new_item(fish["kind"])
+                        )
                     self.fish.remove(fish)
                     self.catch_cd_ticks = round(
                         self.t[
@@ -820,3 +849,50 @@ class GatherSim:
                 self.vel[i] = min(
                     0.0, self.vel[i]
                 )
+
+    def _new_item(self, kind):
+        """Tạo một cá thể mới và cấp ID không tái sử dụng."""
+        item_id = self.ids.new("I")
+        initial = Fraction(str(self.freshness["initial"]))
+
+        self._fresh_exact[item_id] = initial
+
+        return {
+            "id": item_id,
+            "kind": kind,
+            "fresh": float(initial),
+        }
+
+    def _age_hold(self, events):
+        """Hao tươi các cá thể đã có từ đầu tick."""
+        decay = (
+            Fraction(str(self.freshness["gather_decay_per_s"]))
+            / self.hz
+        )
+        threshold = Fraction(
+            str(self.freshness["spoiled_below"])
+        )
+
+        spoiled = []
+
+        for item in self.hold:
+            item_id = item["id"]
+            before = self._fresh_exact[item_id]
+            after = max(Fraction(0), before - decay)
+
+            self._fresh_exact[item_id] = after
+            item["fresh"] = float(after)
+
+            if before >= threshold and after < threshold:
+                spoiled.append(item)
+
+        # Một tick có nhiều cá thể ươn: event theo ID.
+        for item in sort_by_id(spoiled):
+            events.append((
+                "spoiled",
+                {
+                    "item_id": item["id"],
+                    "kind": item["kind"],
+                    "location": "hold",
+                },
+            ))
