@@ -1,11 +1,10 @@
 """Nạp và kiểm scenario (Contract D). Trả về dict của đúng khối theo mode.
 
-KHUNG: kiểm cú pháp, id trùng, bộ đếm âm, khoang vượt sức chứa, trường lạ.
-TODO(nhóm): bổ sung kiểm mâu thuẫn mức luật mà nhóm cần (khách giữ chỗ quá kho, đơn assigned
-phải có đúng một món, khách eating thiếu giá/tip...) — xem PRD-0 mục D và 'Mâu thuẫn -> mã 2'.
+Kiểm cú pháp và phạm vi dữ liệu. QuanSim kiểm mâu thuẫn đơn hàng khi đã nạp kho.
 """
 
 import json
+import math
 
 from .errors import BadInput
 from .inventory import KINDS_P1, validate_items
@@ -18,6 +17,12 @@ FISH_KINDS = ("ca_linh", "ca_loc")
 QUAN_PLAYER_KEYS = {"pos", "vel"}
 QUAN_KEYS = {"player", "stock", "hand", "stoves", "tables", "customers", "random_customers",
              "reputation", "time_left_ticks"}
+QUAN_ENTITY_KEYS = {
+    "stoves": {"id", "pos", "state", "dish", "cook_ticks_left", "ready_ticks"},
+    "tables": {"id", "pos"},
+    "customers": {"id", "table_id", "dish_id", "order_tick", "state", "patience_ticks_left", "eat_ticks_left",
+                  "order_status", "reserved", "base_price", "tip"},
+}
 
 
 def _check_ids(name, arr):
@@ -64,7 +69,7 @@ def load_scenario(path, mode: str, tuning: dict) -> dict:
 
 
 def _num(v):
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    return type(v) is int or (type(v) is float and math.isfinite(v))
 
 
 def _nonneg_int(name, v):
@@ -141,9 +146,13 @@ def _validate_gather(b, tuning):
 
 
 def _validate_quan(b, tuning):
-    for arr in ("stoves", "tables", "customers"):
-        if arr in b:
-            _check_ids(arr, b[arr])
+    for name, allowed in QUAN_ENTITY_KEYS.items():
+        if name in b:
+            _check_ids(name, b[name])
+            for entity in b[name]:
+                extra = set(entity) - allowed
+                if extra:
+                    raise BadInput(f"{name}.{entity['id']}: trường lạ {sorted(extra)}")
     if "stock" in b:
         validate_items(b["stock"])
     p = b.get("player", {})
@@ -154,8 +163,15 @@ def _validate_quan(b, tuning):
         _pos("player.pos", p["pos"], qb, axes=("x", "z"))
     if "vel" in p and not (isinstance(p["vel"], list) and len(p["vel"]) == 2 and all(_num(c) for c in p["vel"])):
         raise BadInput("player.vel phải là [x, z]")
+    for name in ("stoves", "tables"):
+        known = {fixture["id"] for fixture in tuning["quan"][name]}
+        for fixture in b.get(name, []):
+            if fixture["id"] not in known:
+                raise BadInput(f"{name}.{fixture['id']}: không có trong tuning")
+            if "pos" in fixture:
+                _pos(f"{name}.{fixture['id']}.pos", fixture["pos"], qb, axes=("x", "z"))
     table_ids = [c.get("table_id") for c in b.get("customers", [])]
-    known = {t["id"] for t in tuning["quan"]["tables"]} | {t.get("id") for t in b.get("tables", [])}
+    known = {t["id"] for t in tuning["quan"]["tables"]}
     for c in b.get("customers", []):
         if not isinstance(c.get("table_id"), str) or c["table_id"] not in known:
             raise BadInput(f"customers.{c['id']}: table_id phải là bàn có thật")
