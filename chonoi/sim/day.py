@@ -34,7 +34,8 @@ class DaySim:
     def _start_day(self):
         self.phase = "gather"
         self.active_upgrades = self.upgrades.copy()
-        self.plan = self.plans[self.day]
+        plan_day = ((self.day - 1) % 5) + 1
+        self.plan = self.plans[plan_day]
         self.stock = [] if self.freshness else {}
         fixture = self.scenario.get("gather", {})
         if self.freshness and self.day > 1 and "hold" in fixture:

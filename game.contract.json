@@ -5,6 +5,8 @@
   "build_cmd": "true",
   "run_cmd": "python -m chonoi.live --mode day --port 0",
   "headless_cmd": "python -m chonoi.headless",
+  "bench_cmd": "python -m chonoi.bench",
+  "soak_cmd": "python -m chonoi.soak",
   "tuning": {
     "tick_hz": 60,
     "freshness": {"initial": 100, "gather_decay_per_s": 0.5, "quan_decay_per_s": 0.25, "spoiled_below": 30},
