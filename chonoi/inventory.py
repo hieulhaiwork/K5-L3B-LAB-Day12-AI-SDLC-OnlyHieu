@@ -1,14 +1,14 @@
-"""File kho (Contract G): {"items": {id: số nguyên >= 0}}.
-
-Đọc: từ chối sai schema / id lạ / số âm (BadInput -> mã 2).
-Ghi: bỏ mục bằng 0, qua file tạm cùng thư mục rồi thay thế, byte-ổn-định.
-"""
+"""Đọc kho theo phiên bản contract và ghi qua file tạm cùng thư mục."""
 
 import json
 import os
 import tempfile
+from decimal import Decimal
 
 from .errors import BadInput
+from .freshness import validate_individuals
+from .ids import sort_by_id
+from .jsonl import dumps
 
 KINDS_P1 = (
     "ca_loc",
@@ -38,15 +38,16 @@ def validate_items(items, kinds=KINDS_P1):
     return out
 
 
-def read_inventory(path: str, kinds=KINDS_P1) -> dict:
+def read_inventory(path: str, kinds=KINDS_P1, contract_version="1.1"):
     try:
         with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+            data = json.load(f, parse_float=Decimal)
     except (OSError, ValueError) as e:
         raise BadInput(f"không đọc được file kho {path}: {e}")
     if not isinstance(data, dict) or set(data.keys()) != {"items"}:
         raise BadInput("file kho chỉ được có khóa gốc 'items'")
-    return validate_items(data["items"], kinds)
+    validator = validate_individuals if contract_version == "1.2" else validate_items
+    return validator(data["items"], kinds)
 
 
 def hold_to_items(hold: list) -> dict:
@@ -57,14 +58,16 @@ def hold_to_items(hold: list) -> dict:
     return {k: counts[k] for k in sorted(counts)}
 
 
-def write_inventory(path: str, items: dict):
-    items = {k: items[k] for k in sorted(items) if items[k] > 0}
+def write_inventory(path: str, items):
+    if isinstance(items, list):
+        items = sort_by_id(items)
+    else:
+        items = {k: items[k] for k in sorted(items) if items[k] > 0}
     d = os.path.dirname(os.path.abspath(path))
     fd, tmp = tempfile.mkstemp(prefix=".inv-", suffix=".tmp", dir=d)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            json.dump({"items": items}, f, ensure_ascii=False, separators=(",", ":"))
-            f.write("\n")
+            f.write(dumps({"items": items}) + "\n")
         os.replace(tmp, path)
     except BaseException:
         if os.path.exists(tmp):

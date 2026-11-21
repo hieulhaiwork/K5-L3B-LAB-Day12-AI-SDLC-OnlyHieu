@@ -18,10 +18,12 @@ Cách làm việc kỹ thuật là **tự do** (push thẳng, nhánh + PR, pair,
 ```bash
 git clone <fork-của-nhóm> && cd <fork-của-nhóm>
 PYTHONPATH=tests:. python3 -m unittest discover -s tests -v        # smoke test
-python3 -m chonoi.live --mode gather                                # chơi thử trên trình duyệt (tùy chọn)
+python3 -m chonoi.live --mode day --port 0                          # chơi Gather → Quán → Shop trong trình duyệt
 ```
 
-Game cần chế độ **headless** theo Test Contract (`python3 -m chonoi.headless --mode gather|quan …`) để được chạy và chấm tự động. **Công nghệ không ràng buộc**: khung Python trong `chonoi/` chỉ là gợi ý, chi tiết ở [`docs/STARTER.md`](docs/STARTER.md).
+Mở địa chỉ do terminal in ra và chọn **Chơi**. **WASD hoặc phím mũi tên** để di chuyển, **E** để tương tác, **Space** để bắt cá, **P** hoặc **Esc** để tạm dừng và **R** để chơi lại. Trong Shop, chọn nâng cấp bình oxy, áo phao hoặc **Đóng Shop**. Phím **1** và **2** là phím tắt mua nâng cấp. Điểm bằng `earned + 100 × floor(reputation)`.
+
+Test Contract hỗ trợ `python3 -m chonoi.headless --mode gather|quan|day …`. Để chơi riêng Quán, dùng `python3 -m chonoi.live --mode quan --inventory docs/contracts/inventory.sample.json --port 0`. Phase 3 dùng [mẫu kho cá thể v1.2](docs/contracts/inventory.sample.json). Xem cách đổi fixture trong [CHANGELOG.md](CHANGELOG.md).
 
 ## Tự do sáng tạo
 

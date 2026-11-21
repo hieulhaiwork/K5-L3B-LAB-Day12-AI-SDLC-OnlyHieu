@@ -7,32 +7,12 @@ from .gather import GatherSim
 from .quan import QuanSim
 
 
-def build_gather(tuning, scenario, streams, ids, **kwargs):
-    """Chuyển số đàn trong manifest v1.1 thành fixture cho GatherSim."""
-    gather = tuning["gather"]
-    if "fish" not in scenario and scenario.get("random_fish", True):
-        rng = streams.get("fish_initial")
-        weights = gather["fish_weights"]
-        positions = {kind: [(x, d) for x in gather["fish_spawn_x"] for d in gather["fish_spawn_depths"][kind]]
-                     for kind in sorted(weights)}
-        fish = []
-        for _ in range(gather["fish_initial"]):
-            eligible = [kind for kind, points in positions.items() if points]
-            kind = rng.choices(eligible, weights=[weights[k] for k in eligible], k=1)[0]
-            pos = rng.choice(positions[kind])
-            fish.append({"id": ids.new("F"), "kind": kind, "pos": pos, "heading_deg": rng.uniform(0, 360)})
-            for points in positions.values():
-                if pos in points:
-                    points.remove(pos)
-        scenario = dict(scenario, fish=fish)
-    return GatherSim(tuning, scenario, streams, ids, **kwargs)
-
-
 class DaySim:
     mode = "day"
 
     def __init__(self, tuning, scenario, seed, days):
         self.tuning, self.scenario, self.days = tuning, scenario, days
+        self.freshness = tuning.get("freshness")
         self.streams = Streams(seed)
         self.ids = IdAllocator()
         start = scenario.get("day", {})
@@ -55,9 +35,12 @@ class DaySim:
         self.phase = "gather"
         self.active_upgrades = self.upgrades.copy()
         self.plan = self.plans[self.day]
-        self.stock = {}
-        self.current = build_gather(self.tuning, self.scenario.get("gather", {}), self.streams, self.ids,
-                                    day=self.day, active_upgrades=self.active_upgrades)
+        self.stock = [] if self.freshness else {}
+        fixture = self.scenario.get("gather", {})
+        if self.freshness and self.day > 1 and "hold" in fixture:
+            fixture = dict(fixture, hold=[dict(item, id=self.ids.new("I")) for item in fixture["hold"]])
+        self.current = GatherSim(self.tuning, fixture, self.streams, self.ids,
+                                 day=self.day, active_upgrades=self.active_upgrades)
 
     def _event(self, name, data):
         return self.phase, self.day, name, data
@@ -94,7 +77,7 @@ class DaySim:
         if not close and self.shop_ticks:
             return events
         events.append(self._event("shop_end", {"reason": "done" if close else "time"}))
-        self.stock = {}
+        self.stock = [] if self.freshness else {}
         self.days_completed += 1
         if self.days_completed == self.days:
             self.done, self.reason = True, "days_complete"
@@ -119,7 +102,7 @@ class DaySim:
                                    earned=self.earned, reputation=self.reputation)
             self.phase = "quan"
         else:
-            self.stock = self.current.snapshot()["stock"]
+            self.stock = self.current.inventory_items()
             self.phase = "shop"
             self.shop_ticks = self.tuning["shop"]["max_ticks"]
         return [*events, self._event("phase_start", {})]

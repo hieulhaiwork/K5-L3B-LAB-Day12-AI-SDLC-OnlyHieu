@@ -20,14 +20,13 @@ Nhóm viết tiếp (đúng thứ tự một bước trong PRD mục 13.8, "Gath
 Các tính năng của phase sau chưa nằm trong khung này.
 """
 
-from asyncio import events
 import math
-from fractions import Fraction
 
+from ..errors import BadInput
+from ..freshness import decay, exact, snapshot_items, validate_individuals
 from ..ids import id_key, sort_by_id
-from ..inventory import hold_to_items
+from ..inventory import hold_to_items, ingredient_kinds
 from .ramp import ramp_velocity
-from chonoi import ids
 
 # TICK = 60.0
 AXES = ("x", "d")
@@ -86,6 +85,10 @@ class GatherSim:
             "oxygen_ticks", self.oxygen_max
         )
         self.hp = player.get("hp", self.hp_max)
+        if not 0 <= self.oxygen_ticks <= self.oxygen_max:
+            raise BadInput("player.oxygen_ticks vượt oxy tối đa đang áp dụng")
+        if not 1 <= self.hp <= self.hp_max:
+            raise BadInput("player.hp vượt giới hạn Máu đang áp dụng")
         self.zero_oxy_ticks = player.get(
             "zero_oxy_ticks", 0
         )
@@ -96,20 +99,13 @@ class GatherSim:
             "catch_cd_ticks", 0
         )
 
-        self.freshness = tuning["freshness"]
-        # Giữ thứ tự nhặt; mỗi item là một dict độc lập.
-        self.hold = [
-            dict(item)
-            for item in scenario.get("hold", [])
-        ]
-
-        # Lưu độ tươi chính xác để so ngưỡng 30.
-        # Không lưu Fraction trực tiếp vào JSONL.
-        self._fresh_exact = {
-            item["id"]: Fraction(str(item["fresh"]))
-            for item in self.hold
-        }
-
+        self.freshness = tuning.get("freshness")
+        self.hold = list(scenario.get("hold", []))
+        if self.freshness:
+            self.hold = validate_individuals(self.hold, ingredient_kinds(tuning))
+            self.hold_decay = exact(self.freshness["gather_decay_per_s"]) / self.hz
+            for item in self.hold:
+                self.ids.reserve(item["id"])
         self.time_left_ticks = scenario.get(
             "time_left_ticks",
             round(self.t["duration_s"] * self.hz),
@@ -128,10 +124,11 @@ class GatherSim:
         ]
 
         # random_fish=false: fixture fish remain stationary.
-        fish_data = scenario.get(
-            "fish",
-            self.t["fish_initial"] if self.random_fish else [],
-        )
+        initial_fish = self.t["fish_initial"]
+        default_fish = initial_fish if self.random_fish and isinstance(initial_fish, list) else []
+        fish_data = scenario.get("fish", default_fish)
+        if isinstance(initial_fish, int) and self.random_fish and "fish" not in scenario:
+            fish_data = []
         self.fish = [
             {
                 "id": f["id"],
@@ -179,10 +176,13 @@ class GatherSim:
             self.nodes, self.fish, self.monsters
         ):
             for entity in collection:
-                ids.reserve(entity["id"])
-
-            for item in self.hold:
-                ids.reserve(item["id"])
+                self.ids.reserve(entity["id"])
+        for item in self.hold:
+            self.ids.reserve(item["id"])
+        if self.random_fish and "fish" not in scenario and type(initial_fish) is int:
+            for _ in range(initial_fish):
+                if self._spawn_school("fish_initial") is None:
+                    break
         
         self.money = 0
         self.earned = 0
@@ -209,10 +209,16 @@ class GatherSim:
     
     def inventory_items(self) -> list:
         """Danh sách cá thể dùng khi bàn giao kho."""
-        return [
-            dict(item)
-            for item in sort_by_id(self.hold)
-        ]
+        if self.freshness:
+            return snapshot_items(sort_by_id(self.hold))
+        return hold_to_items(self.hold)
+
+    def _add_to_hold(self, kind, amount):
+        if self.freshness:
+            initial = exact(self.freshness["initial"])
+            self.hold.extend({"id": self.ids.new("I"), "kind": kind, "fresh": initial} for _ in range(amount))
+        else:
+            self.hold.extend([kind] * amount)
 
     def snapshot(self):
         return {
@@ -229,9 +235,7 @@ class GatherSim:
                 "catch_cd_ticks": self.catch_cd_ticks,
                 "at_surface": self._at_surface(),
             },
-            "hold": [
-                dict(item) for item in self.hold
-            ],
+            "hold": snapshot_items(self.hold) if self.freshness else list(self.hold),
             "hold_count": len(self.hold),
             "hold_capacity": self.t["hold_capacity"],
             "nodes": [
@@ -301,9 +305,10 @@ class GatherSim:
                         {"node_id": node["id"]},
                     ))
         
+        if self.freshness:
+            decay(self.hold, self.hold_decay, self.freshness["spoiled_below"], "hold", events)
+
         # 2. Player movement and oxygen.
-        # Phase 3: hao tươi ở đầu bước, trước khi di chuyển.
-        self._age_hold(events)
         was_surface = self._at_surface()
         self._move(inp)
         at_surface = self._at_surface()
@@ -331,7 +336,7 @@ class GatherSim:
             if before > 0 and self.oxygen_ticks == 0:
                 events.append((
                     "oxygen_empty",
-                    {"pos": self.pos.copy()},
+                    {"oxygen_ticks": 0},
                 ))
 
             if self.oxygen_ticks == 0:
@@ -378,15 +383,14 @@ class GatherSim:
                         events.append((
                             "hold_full",
                             {
-                                "source": "node",
+                                "action": "gather",
                                 "node_id": node["id"],
+                                "required": amount,
+                                "free": self.t["hold_capacity"] - len(self.hold),
                             },
                         ))
                     else:
-                        for _ in range(amount):
-                            self.hold.append(
-                                self._new_item(node["kind"])
-                            )
+                        self._add_to_hold(node["kind"], amount)
                         node["regrow_ticks"] = round(
                             self.t["regrow_s"] * self.hz
                         )
@@ -421,15 +425,14 @@ class GatherSim:
                     events.append((
                         "hold_full",
                         {
-                            "source": "fish",
+                            "action": "catch",
                             "fish_id": fish["id"],
+                            "required": amount,
+                            "free": self.t["hold_capacity"] - len(self.hold),
                         },
                     ))
                 else:
-                    for _ in range(amount):
-                        self.hold.append(
-                            self._new_item(fish["kind"])
-                        )
+                    self._add_to_hold(fish["kind"], amount)
                     self.fish.remove(fish)
                     self.catch_cd_ticks = round(
                         self.t[
@@ -441,7 +444,7 @@ class GatherSim:
                         {
                             "fish_id": fish["id"],
                             "kind": fish["kind"],
-                            "amount": amount,
+                            "yield": amount,
                         },
                     ))
             
@@ -461,8 +464,8 @@ class GatherSim:
         ]
         data = {"hp": 0, "lost": lost}
 
-        if cause == "monster":
-            data["cause"] = "monster"
+        if self.freshness or cause == "monster":
+            data["cause"] = cause or "choke"
 
         events.append(("faint", data))
         self._finish("fainted", events)
@@ -710,6 +713,11 @@ class GatherSim:
         ]:
             return
 
+        new = self._spawn_school()
+        if new:
+            events.append(("fish_spawned", {"id": new["id"], "kind": new["kind"], "pos": new["pos"].copy()}))
+
+    def _spawn_school(self, stream="fish_spawn"):
         # Eligible species and geometric spawn locations.
         locations = {}
 
@@ -740,7 +748,7 @@ class GatherSim:
         if not eligible:
             return
 
-        spawner = self.rng.get("fish_spawn")
+        spawner = self.rng.get(stream)
         kind = spawner.choices(
             eligible,
             weights=[
@@ -762,14 +770,7 @@ class GatherSim:
         }
 
         self.fish.append(new)
-        events.append((
-            "fish_spawned",
-            {
-                "id": new["id"],
-                "kind": kind,
-                "pos": pos.copy(),
-            },
-        ))
+        return new
 
     def _nearest(self, entities):
         if not entities:
@@ -850,49 +851,3 @@ class GatherSim:
                     0.0, self.vel[i]
                 )
 
-    def _new_item(self, kind):
-        """Tạo một cá thể mới và cấp ID không tái sử dụng."""
-        item_id = self.ids.new("I")
-        initial = Fraction(str(self.freshness["initial"]))
-
-        self._fresh_exact[item_id] = initial
-
-        return {
-            "id": item_id,
-            "kind": kind,
-            "fresh": float(initial),
-        }
-
-    def _age_hold(self, events):
-        """Hao tươi các cá thể đã có từ đầu tick."""
-        decay = (
-            Fraction(str(self.freshness["gather_decay_per_s"]))
-            / self.hz
-        )
-        threshold = Fraction(
-            str(self.freshness["spoiled_below"])
-        )
-
-        spoiled = []
-
-        for item in self.hold:
-            item_id = item["id"]
-            before = self._fresh_exact[item_id]
-            after = max(Fraction(0), before - decay)
-
-            self._fresh_exact[item_id] = after
-            item["fresh"] = float(after)
-
-            if before >= threshold and after < threshold:
-                spoiled.append(item)
-
-        # Một tick có nhiều cá thể ươn: event theo ID.
-        for item in sort_by_id(spoiled):
-            events.append((
-                "spoiled",
-                {
-                    "item_id": item["id"],
-                    "kind": item["kind"],
-                    "location": "hold",
-                },
-            ))

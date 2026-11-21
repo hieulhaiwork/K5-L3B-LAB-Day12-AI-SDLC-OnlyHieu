@@ -5,9 +5,11 @@ Kiểm cú pháp và phạm vi dữ liệu. QuanSim kiểm mâu thuẫn đơn h�
 
 import json
 import math
+from decimal import Decimal
 
-from .errors import BadInput
 from .day_plan import normalize_day_plan
+from .errors import BadInput
+from .freshness import validate_individuals
 from .inventory import ingredient_kinds, validate_items
 
 GATHER_KEYS = {"player", "hold", "nodes", "fish", "monsters", "random_fish", "time_left_ticks"}
@@ -38,12 +40,24 @@ def _check_ids(name, arr):
         seen.add(e["id"])
 
 
+def _float_vectors(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, list):
+        return [_float_vectors(item) for item in value]
+    return value
+
+
+def _preserve_freshness(obj):
+    return {key: value if key == "fresh" else _float_vectors(value) for key, value in obj.items()}
+
+
 def load_scenario(path, mode: str, tuning: dict) -> dict:
     if path is None:
         return {}
     try:
         with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+            data = json.load(f, parse_float=Decimal, object_hook=_preserve_freshness)
     except (OSError, ValueError) as e:
         raise BadInput(f"không đọc được scenario {path}: {e}")
     allowed = {"gather", "quan", "day"} if mode == "day" else {mode}
@@ -87,8 +101,18 @@ def _validate_day(block, tuning):
                                           for key, level in levels.items()):
         raise BadInput("day.upgrades có cấp không hợp lệ")
     raw_plans = block.get("day_plan", [])
+    if isinstance(raw_plans, dict):
+        entries = []
+        allowed_days = {str(plan["day"]) for plan in tuning["day_plan"]}
+        for day, entry in raw_plans.items():
+            if day not in allowed_days or not isinstance(entry, dict):
+                raise BadInput("day.day_plan cần khóa ngày từ 1 đến 5")
+            if "day" in entry and entry["day"] != int(day):
+                raise BadInput("day.day_plan có số ngày không khớp khóa")
+            entries.append(dict(entry, day=int(day)))
+        raw_plans = entries
     if not isinstance(raw_plans, list):
-        raise BadInput("day.day_plan phải là mảng")
+        raise BadInput("day.day_plan phải là mảng hoặc object theo ngày")
     plans = [normalize_day_plan(entry, tuning["menu"]) for entry in raw_plans]
     if len({entry["day"] for entry in plans}) != len(plans):
         raise BadInput("day.day_plan có Ngày bị trùng")
@@ -142,7 +166,9 @@ def _validate_gather(b, tuning):
     if "hold" in b:
         h = b["hold"]
         kinds = ingredient_kinds(tuning)
-        if not isinstance(h, list) or any(not isinstance(k, str) or k not in kinds for k in h):
+        if "freshness" in tuning:
+            validate_individuals(h, kinds)
+        elif not isinstance(h, list) or any(not isinstance(k, str) or k not in kinds for k in h):
             raise BadInput("hold phải là mảng id nguyên liệu hợp lệ")
         if len(h) > g["hold_capacity"]:
             raise BadInput("hold vượt sức chứa")
@@ -161,7 +187,7 @@ def _validate_gather(b, tuning):
     for key in ("invuln_ticks", "catch_cd_ticks", "zero_oxy_ticks", "oxygen_ticks", "hp"):
         if key in p:
             _nonneg_int(f"player.{key}", p[key])
-    omax = int(round(g["oxygen_max_s"] * 60))
+    omax = round(g["oxygen_max_s"] * tuning["tick_hz"])
     if "oxygen_ticks" in p and p["oxygen_ticks"] > omax:
         raise BadInput("player.oxygen_ticks vượt oxy tối đa")
     if "hp" in p and not (1 <= p["hp"] <= g["hp_max"]):
@@ -236,7 +262,8 @@ def _validate_quan(b, tuning):
                 if extra:
                     raise BadInput(f"{name}.{entity['id']}: trường lạ {sorted(extra)}")
     if "stock" in b:
-        validate_items(b["stock"], ingredient_kinds(tuning))
+        validator = validate_individuals if "freshness" in tuning else validate_items
+        validator(b["stock"], ingredient_kinds(tuning))
     p = b.get("player", {})
     if not isinstance(p, dict) or set(p) - QUAN_PLAYER_KEYS:
         raise BadInput("quan.player chỉ có pos và vel")
