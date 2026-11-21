@@ -1,6 +1,18 @@
 # Standup giữa phase (mỗi người một dòng, 2–3 phút)
 
+Các dòng bổ sung tổng hợp từ Git và bằng chứng kiểm thử từng phase. Kết quả ghi theo mốc của nguồn. Cột **Sắp làm** là việc tiếp theo ở mốc đó.
+
 | Phase | Người | Đã xong | Sắp làm | Vướng gì |
 |---|---|---|---|---|
+| 1 | hieulhaiwork | Hoàn thành Gather và test bơi, oxy, hái, bắt cá, cập bến (`9f1542c`). | Đối chiếu file kho với Quán và chốt câu hỏi PRD. | Nhóm có 3 người, đề ghi 4–6. PO cần xác nhận với giảng viên. [Bằng chứng](proof/phase-1/qa-baseline.md#điều-kiện-còn-mở) |
+| 1 | ThinkLee04 | Hoàn thành nhận đơn, giữ kho, nấu, giao và thanh toán (`4c01bff`). Chín test Quán đạt. [Bằng chứng](proof/phase-1/quan.md) | Thống nhất mô tả schema kho với Gather và kiểm lại trên bản bàn giao. | Ca tích hợp phải dùng đúng file kho mà Gather xuất. |
+| 1 | Honggam1109 | Kiểm CLI, HUD qua API và ca bắt cá đến thu tiền. Bản tích hợp qua 53/53 test. [Bằng chứng](proof/phase-1/qa-baseline.md) | Chơi thử bằng phím trên trình duyệt và kiểm lại trước tag. | Lượt kiểm trình duyệt chưa xác minh được URL Chrome. |
+| 2 | hieulhaiwork | Cập nhật loài cá, cây, Cá Sấu Năm Chèo và phần hiển thị thủy quái (`eceeed5`, `6b09191`). | Nối Gather với vòng `day` và kiểm bàn giao đủ sáu nguyên liệu. | Cần phối hợp với Quán và Integrator để kiểm đầu nối trên cùng bản. [Smoke tích hợp](proof/phase-2/integration.md) |
 | 2 | ThinkLee04 | Đã triển khai 2 bếp, 4 bàn, 6 món, lọc món theo kế hoạch D1–D5 và HUD quán. Smoke hai tiến trình đọc đúng cả 6 nguyên liệu, bộ test local qua 59/59. | Phối hợp nối `QuanSim` vào vòng `day`, chạy smoke một ngày rồi nhiều ngày trên commit bàn giao. | Nhánh quán đang dùng mô phỏng `gather` Phase 1. Bộ điều phối `day`, Shop và pause đang chờ tích hợp. |
+| 2 | Honggam1109 | Tích hợp vòng ngày, pause, Shop và skill QA. Smoke một ngày và năm ngày đạt, bộ test qua 63/63. [Bằng chứng](proof/phase-2/tv3.md) | Kiểm thao tác và FPS trên trình duyệt thật trước bàn giao. | HUD lúc này mới kiểm bằng DOM/Canvas giả lập với HTTP thật. |
+| 3 | hieulhaiwork | Thêm kho cá thể, hao độ tươi và test Gather, gồm mất hàng theo thứ tự LIFO khi bị chạm (`cbe2c7f`). | Đối chiếu ID và độ tươi ở đầu ca Quán với TV2 và Honggam1109. | Hai ca cần dùng chung schema v1.2 và giữ đúng giá trị tại ngưỡng 30. [Ma trận](verification/phase-3.md) |
 | 3 | ThinkLee04 | Gộp vòng ngày và UI từ `main` với kho cá thể v1.2. Kiểm lại bàn giao, pause, Shop và ca từ giỏ rỗng thu 43k. Bộ test local qua 73/73. | Bàn giao cho Integrator để đưa vào `main` và gắn tag. | Bằng chứng hiện chạy trên bản gộp cho `feat/quan`. |
+| 3 | Honggam1109 | Chạy hồi quy trên bản tích hợp, kiểm biên độ tươi qua CLI và API live. Bộ test qua 85/85. [Bằng chứng](proof/phase-3/freshness.md#kiểm-chứng-tv3-trên-main-sau-tích-hợp) | Chốt bằng chứng và kiểm lại trên commit dùng cho `phase-3`. | HUD mới có bằng chứng từ DOM/Canvas giả lập. [Ma trận](verification/phase-3.md) |
+| 4 | hieulhaiwork | Commit `f0a434f` đã có benchmark và soak, cấu hình khai Test Contract v1.3. | Rà các điểm làm rõ và xác nhận commit bàn giao với Integrator. | Hai tag local còn trỏ tới bản trước lượt hoàn thiện. [Clarify](clarify.md#phase-4) |
+| 4 | ThinkLee04 | Ca Quán từ Phase 2 về khách rời và khách tới cùng tick vẫn đạt trong regression Phase 4. [Retro](retro.md#phase-4-cuối) | Đối chiếu kết quả Quán trên commit bàn giao và xác nhận phản tư cá nhân. | Chưa có xác nhận phản tư cá nhân trong repo. |
+| 4 | Honggam1109 | Bản tích hợp local đã chơi trọn một ngày trên Chromium, thử đủ ba cảnh báo, qua 88/88 test và soak 10/10 ngày. ZIP chạy trên Ubuntu. [Bằng chứng](proof/phase-4/run.md) | Kiểm lại trên commit bàn giao và chuẩn bị demo, tag, Release. | Chưa xác minh macOS và GitHub Actions. [Ma trận](verification/phase-4.md) |

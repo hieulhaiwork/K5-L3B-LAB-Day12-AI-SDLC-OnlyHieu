@@ -20,3 +20,5 @@ TV3 kiểm trên `main` local `9e9e0b5` cùng các thay đổi kiểm thử bên
 
 - Bản tích hợp qua 53 test local. Ca đầu cuối xác nhận nguyên liệu bắt ở Gather là nguyên liệu Quán dùng để thu tiền.
 - Kiểm lại trên commit bàn giao và hoàn tất các mục còn mở trong bằng chứng TV3.
+
+Kiểm lại giao diện hai buổi và các test còn hiệu lực trên bản Phase 4 bằng Chromium thật. [Bằng chứng](../proof/phase-4/run.md)

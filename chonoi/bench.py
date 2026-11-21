@@ -2,8 +2,7 @@
 
 Usage: python -m chonoi.bench --seed 42 --duration 30 --out bench.json
 
-Install once: python -m pip install playwright
-              python -m playwright install chromium
+Requires Node.js 22+ and a local Chromium, Chrome or Edge installation.
 
 Unlike an rAF callback counter, this instruments drawGather itself and only
 counts frames after a real draw finishes. Headless Chromium still renders
@@ -14,6 +13,8 @@ import argparse
 import json
 import math
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -23,8 +24,7 @@ from .contract import load_contract
 from .live import LiveGame, LiveServer
 
 
-# App JS draws only for new /state snapshots, even though rAF fires more often.
-# Hook drawGather (not rAF) to count completed Canvas draws.
+# Count completed Canvas draws rather than animation callbacks.
 INSTRUMENT_JS = r"""
 ({warmupMs, durationMs}) => {
   if (typeof drawGather !== 'function' || typeof snap === 'undefined') {
@@ -35,6 +35,7 @@ INSTRUMENT_JS = r"""
   }
   window.__phase4Bench = {
     first: null,
+    firstEpoch: null,
     measuringStart: null,
     measuringEnd: null,
     previous: null,
@@ -45,9 +46,13 @@ INSTRUMENT_JS = r"""
   drawGather = function(w, h) {
     // A real render of the game scene must have completed before counting it.
     const output = oldDrawGather.apply(this, arguments);
+    if (home || restarting || offline) return output;
     const now = performance.now();
     const b = window.__phase4Bench;
-    if (b.first === null) b.first = now;
+    if (b.first === null) {
+      b.first = now;
+      b.firstEpoch = performance.timeOrigin + now;
+    }
     if (b.done) return output;
     if (now - b.first < warmupMs) return output;
     if (b.measuringStart === null) {
@@ -102,15 +107,33 @@ def _metrics(raw, load_ms):
     }
 
 
-def run_benchmark(seed, duration, headed=False):
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError as exc:
-        raise RuntimeError(
-            "Playwright missing: pip install playwright && playwright install chromium"
-        ) from exc
+def chromium_path():
+    override = os.environ.get("CHONOI_BROWSER")
+    if override:
+        return override
+    for name in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "microsoft-edge"):
+        if installed := shutil.which(name):
+            return installed
+    candidates = [Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+                  Path("/Applications/Chromium.app/Contents/MacOS/Chromium")]
+    for variable in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+        if root := os.environ.get(variable):
+            candidates.extend([Path(root, "Google/Chrome/Application/chrome.exe"),
+                               Path(root, "Microsoft/Edge/Application/msedge.exe")])
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    raise RuntimeError("Không tìm thấy Chromium, Chrome hoặc Edge. Đặt CHONOI_BROWSER tới file thực thi.")
 
-    launched_at = time.perf_counter()
+
+def run_benchmark(seed, duration, headed=False):
+    launched_at = time.time_ns() / 1_000_000
+    executable = chromium_path()
+    node = shutil.which("node")
+    if not node:
+        raise RuntimeError("Benchmark cần Node.js 22+")
+    driver = Path(__file__).resolve().parents[1] / "tools" / "chromium.cjs"
+    source = "(" + INSTRUMENT_JS + ")(" + json.dumps({"warmupMs": 3000, "durationMs": duration * 1000}) + ")"
     tuning = load_contract()["tuning"]
     # Gather defaults: player stays docked, freshness enabled, fish and
     # Năm Chèo monsters run, default effects remain on.
@@ -118,44 +141,15 @@ def run_benchmark(seed, duration, headed=False):
     server = LiveServer(game, host="127.0.0.1", port=0)
     server.start()
     try:
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=not headed)
-            try:
-                page = browser.new_page(
-                    viewport={"width": 1280, "height": 720},
-                    device_scale_factor=1,
-                )
-                errors = []
-                page.on("pageerror", lambda err: errors.append(str(err)))
-                page.goto(server.url, wait_until="domcontentloaded", timeout=30000)
-                page.locator('[data-action="start"]').click(timeout=15000)
-                page.wait_for_function(
-                    "typeof snap !== 'undefined' && snap && snap.phase === 'gather' "
-                    "&& !home && !restarting && !offline",
-                    timeout=15000,
-                )
-                # Force one ordinary frame after instrumentation. Subsequent
-                # frames come solely from the game's normal Canvas render loop.
-                page.evaluate(INSTRUMENT_JS, {
-                    "warmupMs": 3000,
-                    "durationMs": duration * 1000,
-                })
-                page.evaluate("() => { lastDraw = null; }")
-                page.wait_for_function(
-                    "window.__phase4Bench && window.__phase4Bench.first !== null",
-                    timeout=10000,
-                )
-                load_ms = (time.perf_counter() - launched_at) * 1000.0
-                page.wait_for_function(
-                    "window.__phase4Bench && window.__phase4Bench.done",
-                    timeout=max(45000, int((duration + 15) * 1000)),
-                )
-                raw = page.evaluate("() => window.__phase4Bench")
-                if errors:
-                    raise RuntimeError(f"Browser JavaScript error: {errors[0]}")
-                return _metrics(raw, load_ms)
-            finally:
-                browser.close()
+        result = subprocess.run(
+            [node, str(driver), executable, server.url, source, "headed" if headed else "headless"],
+            capture_output=True, text=True, encoding="utf-8", timeout=duration + 35,
+            env=dict(os.environ, CHONOI_BENCH_TIMEOUT=str(int((duration + 18) * 1000))),
+        )
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "Không đo được scene trong Chromium")
+        raw = json.loads(result.stdout)
+        return _metrics(raw, raw["firstEpoch"] - launched_at)
     finally:
         server.stop()
 

@@ -11,3 +11,5 @@ Kết quả lát Quán lấy từ bằng chứng của TV2. TV3 chạy lại tr�
 | Mục 2 — UI vòng ngày | Qua API live: menu, thực đơn, nhập kho, kết quả, Shop, pause và sang ngày sau. | [Kết quả TV3](../proof/phase-2/tv3.md) | Đạt kiểm tra bằng JavaScript với DOM/Canvas giả lập và HTTP thật. Chưa đo FPS thực. |
 | Mục 5 — smoke kho và regression P1 | Đọc đúng sáu loại tại snapshot Quán tick 0. Chạy toàn bộ test trên preset v1.1. | [Smoke bàn giao kho](../proof/phase-2/integration.md) · [Kết quả TV3](../proof/phase-2/tv3.md) | Đạt local. |
 | Checkpoint 2 — AI Harness và tag | Rà skill QA, nhật ký AI và lệnh chạy. | [phase-qa](../../.agents/skills/phase-qa/SKILL.md) · [AGENTS](../../AGENTS.md) | Đã có skill QA của TV3. Cần skill phát triển luật của TV2 và tag của nhóm. |
+
+Phase 4 đã bổ sung [skill đổi luật](../../.agents/skills/contract-change/SKILL.md) và kiểm menu, HUD, pause, toàn bộ vòng ngày và Shop trên Chromium. [Bằng chứng](../proof/phase-4/run.md)

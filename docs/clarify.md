@@ -1,5 +1,14 @@
 # Clarify — câu hỏi và câu trả lời (PO ghi, cả nhóm dùng chung)
 
+## Phase 4
+
+| # | Câu hỏi | Quyết định |
+|---|---|---|
+| P4-bench | Đếm nhịp trình duyệt hay số khung Canvas? | Đếm sau khi vẽ xong cảnh Gather thật ở 1280×720. Giữ seed 42, warmup 3 giây, đo 30 giây. Ghi riêng ba mốc hiệu năng theo TICKET-04. |
+| P4-contrast | Làm thế nào để thấy cảnh báo khi không phân biệt được màu? | Dùng nhãn chữ và dấu `!`, hiện đồng thời nếu oxy thấp và thủy quái gần. Ngưỡng trình bày HUD dưới 25% theo TICKET-02. |
+| P4-cli | Dùng trình thông dịch nào trong manifest? | Dùng `python3` theo môi trường sạch macOS/Linux. Khi chạy test trên Windows, dùng chính Python đã khởi động bộ test thay cho shim Microsoft Store. |
+| P4-release | Bằng chứng thuộc bản nào? | Kiểm trên working tree dựa vào `f0a434f` và gói ZIP local. Hai tag hiện có trỏ đến `f0a434f`. Chờ nhóm kiểm lại commit bàn giao trước khi cập nhật tag và công bố Release. |
+
 ## Phase 3
 
 | # | Câu hỏi | Quyết định |

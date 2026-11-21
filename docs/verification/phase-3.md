@@ -11,3 +11,5 @@
 [Bằng chứng Phase 3](../proof/phase-3/freshness.md) · [Test v1.2](../../tests/test_freshness_p3.py) · [Kế hoạch chuyển schema](../plan/phase-3.md)
 
 TV3 kiểm tra lại trên `main` tại `ab3e92a` cùng thay đổi local. Xem [lượt kiểm sau tích hợp](../proof/phase-3/freshness.md#kiểm-chứng-tv3-trên-main-sau-tích-hợp). Bản này đang chờ commit và tag bàn giao `phase-3`.
+
+Phase 4 kiểm lại ID và độ tươi khi bàn giao kho trên Chromium, chạy toàn bộ regression và đối chiếu JSONL với bản gốc. [Bằng chứng](../proof/phase-4/run.md)

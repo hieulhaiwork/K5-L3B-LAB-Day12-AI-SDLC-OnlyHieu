@@ -15,15 +15,33 @@ Cách làm việc kỹ thuật là **tự do** (push thẳng, nhánh + PR, pair,
 
 ## Bắt đầu nhanh
 
+Game dùng **Python 3.12** và Chromium, Chrome hoặc Edge gần đây. Benchmark và kiểm trình duyệt cần thêm **Node.js 22+**. Có thể đặt `CHONOI_BROWSER` tới file thực thi nếu công cụ chưa tự tìm được trình duyệt.
+
 ```bash
-git clone <fork-của-nhóm> && cd <fork-của-nhóm>
-PYTHONPATH=tests:. python3 -m unittest discover -s tests -v        # smoke test
-python3 -m chonoi.live --mode day --port 0                          # chơi Gather → Quán → Shop trong trình duyệt
+git clone https://github.com/hieulhaiwork/K5-L3B-LAB-Day12-AI-SDLC-OnlyHieu.git
+cd K5-L3B-LAB-Day12-AI-SDLC-OnlyHieu
+python3 -m chonoi.live --mode day --port 0
 ```
 
-Mở địa chỉ do terminal in ra và chọn **Chơi**. **WASD hoặc phím mũi tên** để di chuyển, **E** để tương tác, **Space** để bắt cá, **P** hoặc **Esc** để tạm dừng và **R** để chơi lại. Trong Shop, chọn nâng cấp bình oxy, áo phao hoặc **Đóng Shop**. Phím **1** và **2** là phím tắt mua nâng cấp. Điểm bằng `earned + 100 × floor(reputation)`.
+Mở địa chỉ do terminal in ra và chọn **Chơi**. **WASD hoặc phím mũi tên** để di chuyển, **E** để tương tác, **Space** để bắt cá, **P** hoặc **Esc** để tạm dừng, **R** để chơi lại và **C** để đổi tương phản. Trong Shop, nhấn **1** hoặc **2** để mua nâng cấp bình oxy hoặc áo phao. **Đóng Shop** để sang ngày tiếp theo hoặc xem tổng kết. Điểm bằng `earned + 100 × floor(reputation)`.
 
-Test Contract hỗ trợ `python3 -m chonoi.headless --mode gather|quan|day …`. Để chơi riêng Quán, dùng `python3 -m chonoi.live --mode quan --inventory docs/contracts/inventory.sample.json --port 0`. Phase 3 dùng [mẫu kho cá thể v1.2](docs/contracts/inventory.sample.json). Xem cách đổi fixture trong [CHANGELOG.md](CHANGELOG.md).
+## Kiểm thử và phát hành
+
+```bash
+PYTHONPATH=tests:. python3 -m unittest discover -s tests -v
+python3 -m chonoi.headless --mode gather --seed 1 --ticks 600 --out out.jsonl
+python3 -m chonoi.bench --seed 42 --duration 30 --out bench.json
+python3 -m chonoi.soak --seed 7 --days 10 --out soak.json
+python3 tools/package_release.py
+```
+
+Các lệnh trong manifest dùng `python3` trên macOS/Linux. Trên Windows dùng `python` và đặt `$env:PYTHONPATH='tests;.'` trong PowerShell.
+
+Headless hỗ trợ `gather`, `quan` và `day`. Để chơi riêng Quán, chạy **python3 -m chonoi.live --mode quan --inventory docs/contracts/inventory.sample.json --port 0**. [Mẫu kho v1.2](docs/contracts/inventory.sample.json) · [Ma trận kiểm chứng](docs/verification/phase-4.md) · [Release notes](RELEASE_NOTES.md)
+
+## Sáng tạo của nhóm
+
+Cảnh sông và nhà bè dùng Pixel Art tự vẽ bằng Canvas. Sprite, sóng, bong bóng, ánh đèn và khói bếp chạy trên giao diện. [Bằng chứng trình duyệt và regression](docs/verification/phase-4.md)
 
 ## Tự do sáng tạo
 
