@@ -22,14 +22,12 @@ def validate_individuals(items, kinds):
             raise BadInput(f"nguyên liệu lạ: {kind!r}")
         if type(fresh) not in (int, float, Decimal, Fraction):
             raise BadInput("fresh phải là số hữu hạn trong [0, 100]")
-        try:
-            fresh = exact(fresh)
-        except (ValueError, OverflowError, ZeroDivisionError) as exc:
-            raise BadInput("fresh phải là số hữu hạn trong [0, 100]") from exc
+        if isinstance(fresh, Decimal) and not fresh.is_finite():
+            raise BadInput("fresh phải là số hữu hạn trong [0, 100]")
         if not 0 <= fresh <= 100:
             raise BadInput("fresh phải trong [0, 100]")
         seen.add(ident)
-        validated.append({"id": ident, "kind": kind, "fresh": fresh})
+        validated.append({"id": ident, "kind": kind, "fresh": exact(fresh)})
     return validated
 
 
