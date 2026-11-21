@@ -22,7 +22,7 @@ Các tính năng của phase sau chưa nằm trong khung này.
 
 import math
 
-from ..ids import sort_by_id
+from ..ids import id_key, sort_by_id
 from ..inventory import hold_to_items
 from .ramp import ramp_velocity
 
@@ -53,22 +53,27 @@ class GatherSim:
         self.catch_cd_ticks = p.get("catch_cd_ticks", 0)
         self.hold = list(scenario.get("hold", []))  # thứ tự nhặt, cuối mảng là mới nhất
         self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * TICK)))
+        
         # nút và đàn cá: scenario THAY THẾ danh sách mặc định; random_fish=false tắt cá mặc định
         src_nodes = scenario["nodes"] if "nodes" in scenario else t["nodes"]
         self.nodes = [{"id": n["id"], "kind": n["kind"], "pos": [float(c) for c in n["pos"]],
                        "regrow_ticks": n.get("regrow_ticks", 0)} for n in src_nodes]
+        
         if "fish" in scenario:
             src_fish = scenario["fish"]
         elif scenario.get("random_fish", True):
             src_fish = t["fish_initial"]
         else:
             src_fish = []
+        
         # Đàn cá đứng yên ở phase này. Cá bơi / sinh thêm là việc của phase sau.
         self.fish = [{"id": f["id"], "kind": f["kind"], "pos": [float(c) for c in f["pos"]],
                       "heading_deg": f.get("heading_deg", 0)} for f in src_fish]
+        
         for coll in (self.nodes, self.fish):
             for e in coll:
                 ids.reserve(e["id"])
+        
         self.money = 0
         self.earned = 0
         self.reputation = tuning["quan"]["reputation_initial"]
@@ -97,31 +102,155 @@ class GatherSim:
 
     # --- một bước ---------------------------------------------------------------
     def step(self, inp):
+        if self.done:
+            return []
+        
         events = []
+
         # 1. đồng hồ và hàng có sẵn: giảm bộ đếm, nút mọc lại
         self.time_left_ticks = max(0, self.time_left_ticks - 1)
         self.invuln_ticks = max(0, self.invuln_ticks - 1)
         self.catch_cd_ticks = max(0, self.catch_cd_ticks - 1)
+
         for n in sort_by_id(self.nodes):
             if n["regrow_ticks"] > 0:
                 n["regrow_ticks"] -= 1
                 if n["regrow_ticks"] == 0:
                     events.append(("node_regrown", {"node_id": n["id"]}))
+        
         # 2. bơi + chặn mép
+        was_surface = self._at_surface()
         self._move(inp)
-        # TODO(nhóm, lát 1): so phân vùng đầu/cuối bước -> dive / surface (data: pos).
-        # TODO(nhóm, lát 1): oxy theo d CUỐI bước (mặt nước hồi, dưới nước trừ), oxygen_empty khi từ dương
-        #   xuống 0, đếm ngạt, choke (-1 Máu). Máu 0 -> faint + gather_end("fainted") với giỏ rỗng, return.
+        at_surface = self._at_surface()
+
+        if was_surface and not at_surface:
+            events.append(("dive", {"pos": self.pos.copy()}))
+        elif not was_surface and at_surface:
+            events.append(("surface", {"pos": self.pos.copy()}))
+
+        if at_surface:
+            self.oxygen_ticks = min(
+                self.oxygen_max,
+                self.oxygen_ticks
+                + int(self.t["oxygen_refill_per_tick"]),
+            )
+            self.zero_oxy_ticks = 0
+        else:
+            oxygen_before = self.oxygen_ticks
+            self.oxygen_ticks = max(0, oxygen_before - 1)
+
+            if oxygen_before > 0 and self.oxygen_ticks == 0:
+                events.append(
+                    ("oxygen_empty", {"pos": self.pos.copy()})
+                )
+
+            if self.oxygen_ticks == 0:
+                self.zero_oxy_ticks += 1
+
+                if self.zero_oxy_ticks >= int(
+                    self.t["choke_interval_ticks"]
+                ):
+                    self.zero_oxy_ticks = 0
+                    self.hp = max(0, self.hp - 1)
+                    events.append(("choke", {"hp": self.hp}))
+
+                    if self.hp == 0:
+                        self.hold.clear()
+                        events.append(
+                            ("faint", {"pos": self.pos.copy()})
+                        )
+                        self._finish("fainted", events)
+                        return events
+            else:
+                self.zero_oxy_ticks = 0
+
         # 3. interact: bến trước, rồi hái
         if inp.pressed("interact"):
             if self._in_dock():
                 self._finish("docked", events)
                 return events
-            # TODO(nhóm, lát 2): chỉ khi ở mặt nước: hái nút `ready` gần nhất trong interact_radius
-            #   (id nhỏ khi bằng nhau): gather / hold_full; đặt regrow_ticks cho nút.
+
+            if at_surface:
+                nodes = [
+                    n for n in self.nodes
+                    if n["regrow_ticks"] == 0
+                    and math.dist(self.pos, n["pos"])
+                    <= self.t["interact_radius"]
+                ]
+                node = self._nearest(nodes)
+
+                if node is not None:
+                    amount = int(self.t["node_yield"])
+
+                    if not self._has_space(amount):
+                        events.append((
+                            "hold_full",
+                            {
+                                "source": "node",
+                                "node_id": node["id"],
+                            },
+                        ))
+                    else:
+                        self.hold.extend(
+                            [node["kind"]] * amount
+                        )
+                        node["regrow_ticks"] = int(
+                            round(self.t["regrow_s"] * TICK)
+                        )
+                        events.append((
+                            "gather",
+                            {
+                                "node_id": node["id"],
+                                "kind": node["kind"],
+                                "amount": amount,
+                            },
+                        ))
+
         # 4. bắt cá
-        if inp.pressed("catch"):
-            pass  # TODO(nhóm, lát 2): chỉ khi catch_cd_ticks == 0 và dưới nước: fish_caught / hold_full.
+        if (
+            inp.pressed("catch")
+            and not at_surface
+            and self.catch_cd_ticks == 0
+        ):
+            fishes = [
+                f for f in self.fish
+                if math.dist(self.pos, f["pos"])
+                <= self.t["catch_radius"]
+            ]
+            fish = self._nearest(fishes)
+
+            if fish is not None:
+                amount = int(
+                    self.t["fish_yield"][fish["kind"]]
+                )
+
+                if not self._has_space(amount):
+                    events.append((
+                        "hold_full",
+                        {
+                            "source": "fish",
+                            "fish_id": fish["id"],
+                        },
+                    ))
+                else:
+                    self.hold.extend(
+                        [fish["kind"]] * amount
+                    )
+                    self.fish.remove(fish)
+                    self.catch_cd_ticks = int(
+                        round(
+                            self.t["catch_cooldown_s"] * TICK
+                        )
+                    )
+                    events.append((
+                        "fish_caught",
+                        {
+                            "fish_id": fish["id"],
+                            "kind": fish["kind"],
+                            "amount": amount,
+                        },
+                    ))
+            
         # 5. hết giờ
         if self.time_left_ticks <= 0:
             self._finish("time", events)
@@ -155,3 +284,21 @@ class GatherSim:
             elif self.pos[i] >= hi:
                 self.pos[i] = hi
                 self.vel[i] = min(0.0, self.vel[i])
+
+    def _nearest(self, entities):
+        if not entities:
+            return None
+
+        return min(
+            entities,
+            key=lambda e: (
+                math.dist(self.pos, e["pos"]),
+                id_key(e["id"]),
+            ),
+        )
+
+    def _has_space(self, amount):
+        return (
+            len(self.hold) + amount
+            <= int(self.t["hold_capacity"])
+        )
