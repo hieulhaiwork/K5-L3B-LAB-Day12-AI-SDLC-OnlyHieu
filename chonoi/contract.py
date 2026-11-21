@@ -25,6 +25,8 @@ def load_contract(path=DEFAULT_PATH) -> dict:
     except (OSError, ValueError) as e:
         raise BadInput(f"không đọc được {path}: {e}")
     validate_tuning(c.get("tuning"))
+    if c.get("contract_version") == "1.2" and "freshness" not in c["tuning"]:
+        raise BadInput("contract v1.2 cần tuning.freshness")
     return c
 
 
@@ -110,6 +112,14 @@ def validate_tuning(t):
     g, q, menu = t.get("gather"), t.get("quan"), t.get("menu")
     if not isinstance(g, dict) or not isinstance(q, dict) or not isinstance(menu, dict):
         raise BadInput("tuning phải có gather, quan, menu")
+    if "freshness" in t:
+        fresh = t["freshness"]
+        if not isinstance(fresh, dict) or set(fresh) != {"initial", "gather_decay_per_s", "quan_decay_per_s", "spoiled_below"}:
+            raise BadInput("tuning.freshness thiếu trường hoặc có trường lạ")
+        _between("freshness.initial", fresh["initial"], 0, 100)
+        _between("freshness.spoiled_below", fresh["spoiled_below"], 0, fresh["initial"])
+        for field in ("gather_decay_per_s", "quan_decay_per_s"):
+            _between(f"freshness.{field}", fresh[field], 0, 100)
     _validate_gather(g)
     # Quán: dải hợp lệ P1 (PRD mục 13.2)
     _between("quan.duration_s", q.get("duration_s"), 60, 600)

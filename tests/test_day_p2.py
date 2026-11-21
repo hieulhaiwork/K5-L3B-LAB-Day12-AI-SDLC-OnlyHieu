@@ -5,7 +5,7 @@ import os
 import unittest
 from pathlib import Path
 
-from helpers import Workdir, events, frames, read_jsonl, run_headless, snapshots, write_json
+from helpers import Workdir, events, frames, individuals, item_counts, read_jsonl, run_headless, snapshots, write_json
 from chonoi.contract import load_contract
 from chonoi.live import LiveGame
 
@@ -15,7 +15,7 @@ class DayPhase2(unittest.TestCase):
         with Workdir() as w:
             scenario = write_json(w.path("day.json"), {
                 "day": {"money": 200, "earned": 200},
-                "gather": {"hold": ["ca_loc", "bong_sung", "bong_sung"], "time_left_ticks": 1, "random_fish": False},
+                "gather": {"hold": individuals(["ca_loc", "bong_sung", "bong_sung"]), "time_left_ticks": 1, "random_fish": False},
                 "quan": {"time_left_ticks": 1},
             })
             inputs = write_json(w.path("inputs.json"), frames(
@@ -36,8 +36,9 @@ class DayPhase2(unittest.TestCase):
             rows = read_jsonl(files[0])
             self.assertEqual([r["name"] for r in rows[:3]], ["day_start", "day_plan", "phase_start"])
             snap = {r["tick"]: r for r in snapshots(rows)}
-            self.assertEqual((snap[1]["phase"], snap[1]["phase_tick"], snap[1]["stock"]),
+            self.assertEqual((snap[1]["phase"], snap[1]["phase_tick"], item_counts(snap[1]["stock"])),
                              ("quan", 0, {"bong_sung": 2, "ca_loc": 1}))
+            self.assertEqual(snap[1]["stock"], events(rows, "gather_end")[0]["data"]["inventory"]["items"])
             self.assertEqual((snap[2]["phase"], snap[2]["phase_tick"]), ("shop", 0))
             self.assertEqual((snap[3]["state"], snap[3]["sim_tick"], snap[4]["time_left_ticks"]),
                              ("paused", 2, snap[2]["time_left_ticks"]))
@@ -72,7 +73,7 @@ class DayPhase2(unittest.TestCase):
     def test_invalid_day_arguments_and_scenarios_fail_before_output(self):
         with Workdir() as w:
             out = w.path("out.jsonl")
-            scenario = write_json(w.path("invalid.json"), {"quan": {"stock": {}}})
+            scenario = write_json(w.path("invalid.json"), {"quan": {"stock": []}})
             for args in (("--mode", "day", "--days", "0"), ("--mode", "gather", "--days", "1"),
                          ("--mode", "day", "--scenario", scenario)):
                 with self.subTest(args=args):
@@ -81,7 +82,9 @@ class DayPhase2(unittest.TestCase):
 
     def test_live_presentation_waits_before_advancing_quan_and_shop(self):
         tuning = load_contract()["tuning"]
-        game = LiveGame("day", tuning, {"gather": {"time_left_ticks": 1}, "quan": {"time_left_ticks": 1}}, 1)
+        fixture = {"gather": {"time_left_ticks": 1, "hold": individuals(["ca_loc"], fresh=30)},
+                   "quan": {"time_left_ticks": 1}}
+        game = LiveGame("day", tuning, fixture, 1)
 
         def state():
             return json.loads(game.state_json())
@@ -97,7 +100,11 @@ class DayPhase2(unittest.TestCase):
         self.assertEqual(state()["ui"]["screen"], "day_intro")
         interact()
         game._tick_once()
-        self.assertEqual((state()["ui"]["screen"], state()["phase_tick"]), ("evening_intro", 0))
+        evening = state()
+        self.assertEqual((evening["ui"]["screen"], evening["phase_tick"]), ("evening_intro", 0))
+        handoff, = [event for event in evening["events"] if event["name"] == "gather_end"]
+        self.assertEqual(evening["stock"], handoff["data"]["inventory"]["items"])
+        self.assertEqual(evening["meta"]["spoiled_ids"], ["I1"])
         game._tick_once()
         self.assertEqual(state()["phase_tick"], 0)
         interact()
@@ -108,3 +115,4 @@ class DayPhase2(unittest.TestCase):
         game.set_input({"pause": True})
         game._tick_once()
         self.assertEqual((state()["state"], state()["time_left_ticks"]), ("paused", 600))
+        self.assertEqual(state()["stock"][0]["id"], "I1")

@@ -1,5 +1,12 @@
 # Clarify — câu hỏi và câu trả lời (PO ghi, cả nhóm dùng chung)
 
+## Phase 3
+
+| # | Câu hỏi | Quyết định |
+|---|---|---|
+| P3-kho | Có giữ kho đếm trong lượt chạy v1.2 không? | Mã thoát `2` nếu đưa kho đếm vào v1.2. Bộ đọc legacy dùng schema theo phiên bản cấu hình. Gather ghi nguyên tử qua file hoặc chuyển kho cá thể trong bộ nhớ. |
+| P3-reserved | Xử lý fixture có đơn chỉ định ID xen với đơn tự giữ thế nào? | Kiểm và giữ các ID khai tường minh trước. Các đơn còn lại cấp theo `order_tick` rồi ID bàn, tránh lấy ID của đơn đã chỉ định. Khi hao tươi, lần lượt nhả và thử giữ lại từng đơn bị ảnh hưởng theo đúng ưu tiên. |
+
 ## Phase 2
 
 | # | Ngày giờ | Câu hỏi | Trả lời / giả định | Ai quyết |

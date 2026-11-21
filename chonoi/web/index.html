@@ -118,6 +118,12 @@ addEventListener("keydown", (e) => {
     return;
   }
   const overlay = overlayType();
+  if (overlay === "shop" && !e.repeat) {
+    if (k === "1" || k === "2") {
+      e.preventDefault(); send({buy:k === "1" ? "oxygen" : "hp"}); return;
+    }
+    if (k === "enter" && !button) { e.preventDefault(); pulse("shop_done"); return; }
+  }
   if (overlay === "day_intro" && !e.repeat && !["tab","shift","alt","control","meta"].includes(k) &&
       !(button && (k === " " || k === "enter"))) { e.preventDefault(); pulse("interact"); return; }
   if (overlay || (button && k === " ")) return;
@@ -151,7 +157,11 @@ async function poll() {
     const r = await fetch("/state", { cache: "no-store" });
     if (!r.ok) throw Error("state");
     const state = await r.json();
-    if (!restarting && version===current) { snap=state; offline=false; }
+    if (!restarting && version===current) {
+      const previousPhase=snap?.phase;
+      snap=state; offline=false;
+      if (!home && previousPhase && previousPhase!==snap.phase) pushInput();
+    }
   } catch { if (version===current) { offline=true; down.clear(); lastSent=""; } }
   renderUI();
   setTimeout(poll, home ? 400 : 24);
@@ -197,13 +207,34 @@ const meter = (value,warn)=>'<div class="meter'+(warn?' warn':'')+'"><i style="w
 const distance = (a,b)=>a&&b?Math.hypot(a[0]-b[0],a[1]-b[1]):Infinity;
 function holdCounts(hold) {
   const counted={};
-  for (const id of hold||[]) counted[id]=(counted[id]||0)+1;
+  for (const item of hold||[]) {
+    const id=typeof item==="string"?item:item.kind;
+    counted[id]=(counted[id]||0)+1;
+  }
   return counted;
 }
+function spoiled(item, state) {
+  const meta=state.meta;
+  return meta.spoiled_ids?.includes(item.id) ?? (item.fresh < meta.freshness?.spoiled_below);
+}
+function availableItems(state) {
+  const reserved=new Set((state.customers||[]).flatMap((customer)=>customer.reserved));
+  return state.stock.filter((item)=>!reserved.has(item.id)&&!spoiled(item,state));
+}
 function availableStock(s) {
+  if (Array.isArray(s.stock)) return holdCounts(availableItems(s));
   const stock={...s.stock};
   for (const c of s.customers||[]) for (const [id,n] of entries(c.reserved)) stock[id]=(stock[id]||0)-n;
   return stock;
+}
+function stockRows(stock, state) {
+  if (!Array.isArray(stock) || stock.some((item)=>typeof item==="string")) {
+    return items(Array.isArray(stock)?holdCounts(stock):stock,kind);
+  }
+  return stock.map((item)=>{
+    const stale=spoiled(item,state);
+    return topLine(kind(item.kind)+" · "+item.id,stale?"Ươn":item.fresh.toFixed(1)+"%",stale?"warn":"");
+  }).join("")||'<p class="muted">Trống</p>';
 }
 function setHTML(el,html) {
   if (el._html===html) return false;
@@ -221,10 +252,11 @@ function introContent(view) {
     cards(box("Món dự định nấu",items(snap.day_plan.dishes,dish)),box("Nguyên liệu cần lấy",items(snap.day_plan.ingredients,kind)))+
     actions(button("next","Xuống bến",true))+'<p class="muted">Tự chuyển sau 4 giây hoặc khi nhấn phím.</p>';
   if (view==="evening_intro") {
-    const stock=snap.stock, total=Object.values(stock).reduce((sum,n)=>sum+n,0), available=availableStock(snap);
+    const stock=snap.stock, total=Array.isArray(stock)?stock.length:Object.values(stock).reduce((sum,n)=>sum+n,0);
+    const available=availableStock(snap);
     const dishes=Object.keys(snap.day_plan.dishes).filter((id)=>
       entries(snap.meta.menu[id].recipe).every(([k,n])=>(available[k]||0)>=n));
-    return heading(label,"Mở đèn nhà bè")+cards(box("Nhập kho · "+total+" phần",items(stock,kind)),box("Món nấu được",
+    return heading(label,"Mở đèn nhà bè")+cards(box("Nhập kho · "+total+" phần",stockRows(stock,snap)),box("Món nấu được",
       dishes.map((id)=>'<p>'+esc(dish(id))+'</p>').join("")||'<p class="muted">Chưa có món.</p>'))+actions(button("next","Mở quán",true));
   }
   if (view==="day_result") {
@@ -250,7 +282,7 @@ function introContent(view) {
       ({funds:"Chưa đủ tiền.",max_level:"Đã nâng tối đa.",unknown:"Nâng cấp không hợp lệ."}[reply?.data.reason]||"");
     return heading(label,"Shop cuối ngày")+'<div class="row"><strong>Tiền hiện có '+money(snap.money)+'</strong><span id="shop-time"></span></div>'+
       cards(...upgrades)+(message?'<p role="status">'+esc(message)+'</p>':"")+
-      actions(button("pause","Tạm dừng"),button("close-shop",snap.day===5?"Đóng Shop · Tổng kết":"Đóng Shop",true));
+      actions(button("pause","Tạm dừng"),button("close-shop",snap.day===snap.ui.days?"Đóng Shop · Tổng kết":"Đóng Shop",true));
   }
   if (view==="finished") {
     const full=snap.mode==="day"&&snap.reason==="days_complete", best=entries(snap.ui?.sold).sort((a,b)=>b[1]-a[1])[0];
@@ -265,7 +297,7 @@ function renderHud() {
   if (!snap) return section("Rạch Sen","Đang kết nối máy chủ…");
   const hz=snap.meta?.tick_hz||60, time=fmtTime(snap.time_left_ticks,hz), p=snap.player;
   if (snap.phase==="shop") return section("Shop",topLine("Còn lại",time)+topLine("Tiền",money(snap.money)))+
-    section("Kho dư",items(snap.stock,kind));
+    section("Kho dư",stockRows(snap.stock,snap));
   if (snap.phase==="gather") {
     const held=holdCounts(snap.hold), oxygen=p.oxygen_ticks/p.oxygen_max_ticks;
     const goals=entries(snap.day_plan?.ingredients).map(([id,n])=>topLine(kind(id),(held[id]||0)+"/"+n)).join("");
@@ -273,7 +305,7 @@ function renderHud() {
       topLine("Máu","♥".repeat(p.hp)+"♡".repeat(Math.max(0,p.hp_max-p.hp)),"warn")+
       topLine("Oxy",fmtTime(p.oxygen_ticks,hz),oxygen<.25?"warn":"")+meter(oxygen,oxygen<.25)+
       topLine("Độ sâu",p.pos[1].toFixed(1)+" m")+topLine("Hồi bắt",p.catch_cd_ticks?(p.catch_cd_ticks/hz).toFixed(1)+" s":"Sẵn sàng"))+
-      section("Giỏ · "+snap.hold.length+"/"+snap.hold_capacity,items(held,kind))+(goals?section("Đã lấy / cần",goals):"");
+      section("Giỏ · "+snap.hold.length+"/"+snap.hold_capacity,stockRows(snap.hold,snap))+(goals?section("Đã lấy / cần",goals):"");
   }
   const patience=snap.meta.patience_s*hz;
   const tables=(snap.tables||[]).map((t)=>{
@@ -285,9 +317,12 @@ function renderHud() {
   }).join("");
   const stoves=(snap.stoves||[]).map((st)=>topLine(st.id,st.state==="cooking"?"Đang nấu · "+fmtTime(st.cook_ticks_left,hz):
     st.state==="ready"?"Món đã chín":"Bếp rảnh")).join("");
+  const available=Array.isArray(snap.stock)?availableItems(snap):availableStock(snap);
+  const stale=Array.isArray(snap.stock)?snap.stock.filter((item)=>spoiled(item,snap)).length:0;
   return section("Mở Quán",topLine("Thời gian",time)+topLine("Thu ca",money(snap.shift_earned))+topLine("Uy tín",Number(snap.reputation).toFixed(1))+
     topLine("Đang cầm",snap.hand?dish(snap.hand.dish_id):"Tay trống"))+
-    section("Kho khả dụng",items(availableStock(snap),kind))+section("Bàn khách",tables)+section("Bếp",stoves);
+    section("Kho khả dụng",stockRows(available,snap)+(stale?topLine("Hàng ươn",stale,"warn"):""))+
+    section("Bàn khách",tables)+section("Bếp",stoves);
 }
 function renderUI() {
   const view=overlayType(), phase=snap?.phase, day=snap?.day ? "Ngày "+snap.day+" · " : "";

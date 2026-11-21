@@ -8,12 +8,14 @@
 - Chơi vòng ngày trên trình duyệt: `python3 -m chonoi.live --mode day` (WASD, E, Space, Esc/P). Vẫn hỗ trợ `--mode gather` và `--mode quan`.
 - Kiểm thử lát quán Phase 2: `PYTHONPATH=tests:. python3 -m unittest discover -s tests -p 'test_quan_p*.py' -v`
 - Mở quán với kho mẫu: `python3 -m chonoi.live --mode quan --inventory docs/contracts/inventory.sample.json --port 0`
+- Chạy vòng ngày v1.2: `python3 -m chonoi.headless --mode day --days 1 --seed 17 --ticks 22200 --out out.jsonl`
 
 ## Cấu trúc & quy ước
 - (Starter Python là TÙY CHỌN; nhóm có thể dùng ngôn ngữ khác nếu giữ Test Contract.) Khung do giảng viên cấp: `chonoi/{headless,inputs,scenario,contract,rng,ids,jsonl,inventory,runner,live}.py` và `chonoi/web/`. Hạn chế sửa; nếu phải sửa thì báo cả nhóm và ghi lại lý do.
 - Luật chơi của nhóm: `chonoi/sim/gather.py`, `chonoi/sim/quan.py` (tìm `TODO(nhóm)`).
 - Khi chuyển `day` sang ca tối, truyền kho thực, kế hoạch ngày, `money`, `earned` và `reputation` vào `QuanSim`. Giữ `shift_earned` riêng cho mỗi ca.
 - `DaySim` điều phối ca sáng, ca tối và Shop. `Session` quản lý pause và tick. Màn giới thiệu/kết quả thuộc live, không cộng tick gameplay headless.
+- Với v1.2, giữ nguyên `id`, `kind` và độ tươi khi bàn giao kho. Giá và lượt `spoiled` dựa trên giá trị trước định dạng JSONL.
 - **Số liệu chỉ đọc từ `game.contract.json` / dữ liệu**, không hard-code trong luật.
 - Mọi số ngẫu nhiên đi qua `Streams` (`chonoi/rng.py`); không dùng `random` toàn cục, không dùng đồng hồ hệ thống.
 - Sắp danh sách thực thể bằng `ids.sort_by_id`; cấp id bằng `IdAllocator`.
