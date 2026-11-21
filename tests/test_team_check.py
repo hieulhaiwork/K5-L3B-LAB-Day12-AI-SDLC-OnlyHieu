@@ -1,10 +1,10 @@
 """Test cho tools/check_team.py (kiểm danh sách thành viên)."""
 
-import os
 import sys
 import unittest
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import check_team  # noqa: E402
 
 GOOD = """# TEAM
@@ -24,9 +24,10 @@ class TeamCheck(unittest.TestCase):
         self.assertEqual(check_team.validate(m, 4, actor="an-nguyen", event="pull_request"), [])
 
     def test_template_is_rejected(self):
-        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "TEAM.md"), encoding="utf-8") as f:
-            m = check_team.parse_team(f.read())
-        self.assertTrue(check_team.validate(m, 4))
+        template = GOOD.replace("@an-nguyen", "handle-1")
+        errors = check_team.validate(check_team.parse_team(template), 4)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("GitHub handle chưa điền hoặc không hợp lệ", errors[0])
 
     def test_wrong_size_duplicate_and_outsider(self):
         m = check_team.parse_team(GOOD)
