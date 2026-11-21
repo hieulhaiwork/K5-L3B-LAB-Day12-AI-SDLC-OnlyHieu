@@ -12,6 +12,7 @@ from .errors import BadInput
 
 BUTTONS_V10 = ("interact", "catch")
 BUTTONS_V11 = (*BUTTONS_V10, "pause", "shop_done")
+BUTTONS_CORE = (*BUTTONS_V11, "attack", "photo")
 
 
 class InputState:

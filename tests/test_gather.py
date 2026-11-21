@@ -6,6 +6,7 @@ import unittest
 from chonoi.contract import load_contract
 from chonoi.inputs import LiveInputs
 from chonoi.runner import Session
+from helpers import individuals, item_counts
 
 
 class GatherRulesTest(unittest.TestCase):
@@ -96,7 +97,7 @@ class GatherRulesTest(unittest.TestCase):
                 "oxygen_ticks": 0,
                 "zero_oxy_ticks": interval - 1,
             },
-            "hold": ["ca_loc"],
+            "hold": individuals(["ca_loc"]),
             "random_fish": False,
         })
 
@@ -109,7 +110,7 @@ class GatherRulesTest(unittest.TestCase):
         self.assertEqual(session.sim.reason, "fainted")
         self.assertEqual(session.sim.hp, 0)
         self.assertEqual(session.sim.hold, [])
-        self.assertEqual(session.sim.inventory_items(), {})
+        self.assertEqual(session.sim.inventory_items(), [])
 
     def test_harvest_nearest_node_with_id_tiebreak(self):
         session = self.make_session({
@@ -136,7 +137,7 @@ class GatherRulesTest(unittest.TestCase):
         self.assertIn("gather", self.names(rows))
         self.assertEqual(
             session.sim.hold,
-            ["bong_dien_dien"],
+            individuals(["bong_dien_dien"]),
         )
         node = next(
             n for n in session.sim.nodes
@@ -174,7 +175,7 @@ class GatherRulesTest(unittest.TestCase):
                 "kind": "bong_sung",
                 "pos": [20, 0],
             }],
-            "hold": ["ca_loc"] * cap,
+            "hold": individuals(["ca_loc"] * cap),
             "random_fish": False,
         })
         inputs = LiveInputs()
@@ -213,9 +214,9 @@ class GatherRulesTest(unittest.TestCase):
         self.assertIn("fish_caught", self.names(rows))
         self.assertEqual(
             session.sim.hold,
-            ["ca_linh"] * self.tuning["gather"][
+            individuals(["ca_linh"] * self.tuning["gather"][
                 "fish_yield"
-            ]["ca_linh"],
+            ]["ca_linh"]),
         )
         self.assertEqual(len(session.sim.fish), 1)
 
@@ -231,7 +232,7 @@ class GatherRulesTest(unittest.TestCase):
         session = self.make_session({
             "player": {"pos": [15, 5]},
             "nodes": [],
-            "hold": ["ca_loc"] * (cap - 1),
+            "hold": individuals(["ca_loc"] * (cap - 1)),
             "fish": [{
                 "id": "F1",
                 "kind": "ca_linh",
@@ -270,7 +271,7 @@ class GatherRulesTest(unittest.TestCase):
     def test_time_limit_keeps_inventory(self):
         session = self.make_session({
             "player": {"pos": [50, 0]},
-            "hold": ["ca_loc", "bong_sung"],
+            "hold": individuals(["ca_loc", "bong_sung"]),
             "time_left_ticks": 1,
             "random_fish": False,
         })
@@ -280,7 +281,7 @@ class GatherRulesTest(unittest.TestCase):
         self.assertIn("gather_end", self.names(rows))
         self.assertEqual(session.sim.reason, "time")
         self.assertEqual(
-            session.sim.inventory_items(),
+            item_counts(session.sim.inventory_items()),
             {"bong_sung": 1, "ca_loc": 1},
         )
 

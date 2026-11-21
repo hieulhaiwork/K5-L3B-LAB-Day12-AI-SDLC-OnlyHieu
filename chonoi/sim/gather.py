@@ -22,8 +22,10 @@ Các tính năng của phase sau chưa nằm trong khung này.
 
 import math
 
+from ..errors import BadInput
+from ..freshness import decay, exact, snapshot_items, validate_individuals
 from ..ids import id_key, sort_by_id
-from ..inventory import hold_to_items
+from ..inventory import hold_to_items, ingredient_kinds
 from .ramp import ramp_velocity
 
 # TICK = 60.0
@@ -83,6 +85,10 @@ class GatherSim:
             "oxygen_ticks", self.oxygen_max
         )
         self.hp = player.get("hp", self.hp_max)
+        if not 0 <= self.oxygen_ticks <= self.oxygen_max:
+            raise BadInput("player.oxygen_ticks vượt oxy tối đa đang áp dụng")
+        if not 1 <= self.hp <= self.hp_max:
+            raise BadInput("player.hp vượt giới hạn Máu đang áp dụng")
         self.zero_oxy_ticks = player.get(
             "zero_oxy_ticks", 0
         )
@@ -93,7 +99,13 @@ class GatherSim:
             "catch_cd_ticks", 0
         )
 
+        self.freshness = tuning.get("freshness")
         self.hold = list(scenario.get("hold", []))
+        if self.freshness:
+            self.hold = validate_individuals(self.hold, ingredient_kinds(tuning))
+            self.hold_decay = exact(self.freshness["gather_decay_per_s"]) / self.hz
+            for item in self.hold:
+                ids.reserve(item["id"])
         self.time_left_ticks = scenario.get(
             "time_left_ticks",
             round(self.t["duration_s"] * self.hz),
@@ -112,10 +124,9 @@ class GatherSim:
         ]
 
         # random_fish=false: fixture fish remain stationary.
-        fish_data = scenario.get(
-            "fish",
-            self.t["fish_initial"] if self.random_fish else [],
-        )
+        initial_fish = self.t["fish_initial"]
+        default_fish = initial_fish if self.random_fish and isinstance(initial_fish, list) else []
+        fish_data = scenario.get("fish", default_fish)
         self.fish = [
             {
                 "id": f["id"],
@@ -164,6 +175,10 @@ class GatherSim:
         ):
             for entity in collection:
                 ids.reserve(entity["id"])
+        if self.random_fish and "fish" not in scenario and type(initial_fish) is int:
+            for _ in range(initial_fish):
+                if self._spawn_school("fish_initial") is None:
+                    break
         
         self.money = 0
         self.earned = 0
@@ -188,8 +203,17 @@ class GatherSim:
             if option["level"] == level
         )
     
-    def inventory_items(self) -> dict:
+    def inventory_items(self):
+        if self.freshness:
+            return snapshot_items(sort_by_id(self.hold))
         return hold_to_items(self.hold)
+
+    def _add_to_hold(self, kind, amount):
+        if self.freshness:
+            initial = exact(self.freshness["initial"])
+            self.hold.extend({"id": self.ids.new("I"), "kind": kind, "fresh": initial} for _ in range(amount))
+        else:
+            self.hold.extend([kind] * amount)
 
     def snapshot(self):
         return {
@@ -206,7 +230,7 @@ class GatherSim:
                 "catch_cd_ticks": self.catch_cd_ticks,
                 "at_surface": self._at_surface(),
             },
-            "hold": list(self.hold),
+            "hold": snapshot_items(self.hold) if self.freshness else list(self.hold),
             "hold_count": len(self.hold),
             "hold_capacity": self.t["hold_capacity"],
             "nodes": [
@@ -276,6 +300,9 @@ class GatherSim:
                         {"node_id": node["id"]},
                     ))
         
+        if self.freshness:
+            decay(self.hold, self.hold_decay, self.freshness["spoiled_below"], "hold", events)
+
         # 2. Player movement and oxygen.
         was_surface = self._at_surface()
         self._move(inp)
@@ -304,7 +331,7 @@ class GatherSim:
             if before > 0 and self.oxygen_ticks == 0:
                 events.append((
                     "oxygen_empty",
-                    {"pos": self.pos.copy()},
+                    {"oxygen_ticks": 0},
                 ))
 
             if self.oxygen_ticks == 0:
@@ -351,14 +378,14 @@ class GatherSim:
                         events.append((
                             "hold_full",
                             {
-                                "source": "node",
+                                "action": "gather",
                                 "node_id": node["id"],
+                                "required": amount,
+                                "free": self.t["hold_capacity"] - len(self.hold),
                             },
                         ))
                     else:
-                        self.hold.extend(
-                            [node["kind"]] * amount
-                        )
+                        self._add_to_hold(node["kind"], amount)
                         node["regrow_ticks"] = round(
                             self.t["regrow_s"] * self.hz
                         )
@@ -393,14 +420,14 @@ class GatherSim:
                     events.append((
                         "hold_full",
                         {
-                            "source": "fish",
+                            "action": "catch",
                             "fish_id": fish["id"],
+                            "required": amount,
+                            "free": self.t["hold_capacity"] - len(self.hold),
                         },
                     ))
                 else:
-                    self.hold.extend(
-                        [fish["kind"]] * amount
-                    )
+                    self._add_to_hold(fish["kind"], amount)
                     self.fish.remove(fish)
                     self.catch_cd_ticks = round(
                         self.t[
@@ -412,7 +439,7 @@ class GatherSim:
                         {
                             "fish_id": fish["id"],
                             "kind": fish["kind"],
-                            "amount": amount,
+                            "yield": amount,
                         },
                     ))
             
@@ -432,8 +459,8 @@ class GatherSim:
         ]
         data = {"hp": 0, "lost": lost}
 
-        if cause == "monster":
-            data["cause"] = "monster"
+        if self.freshness or cause == "monster":
+            data["cause"] = cause or "choke"
 
         events.append(("faint", data))
         self._finish("fainted", events)
@@ -681,6 +708,11 @@ class GatherSim:
         ]:
             return
 
+        new = self._spawn_school()
+        if new:
+            events.append(("fish_spawned", {"id": new["id"], "kind": new["kind"], "pos": new["pos"].copy()}))
+
+    def _spawn_school(self, stream="fish_spawn"):
         # Eligible species and geometric spawn locations.
         locations = {}
 
@@ -711,7 +743,7 @@ class GatherSim:
         if not eligible:
             return
 
-        spawner = self.rng.get("fish_spawn")
+        spawner = self.rng.get(stream)
         kind = spawner.choices(
             eligible,
             weights=[
@@ -733,14 +765,7 @@ class GatherSim:
         }
 
         self.fish.append(new)
-        events.append((
-            "fish_spawned",
-            {
-                "id": new["id"],
-                "kind": kind,
-                "pos": pos.copy(),
-            },
-        ))
+        return new
 
     def _nearest(self, entities):
         if not entities:

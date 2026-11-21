@@ -6,8 +6,17 @@ import os
 import shlex
 import subprocess
 import tempfile
+from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def individuals(kinds, fresh=100):
+    return [{"id": f"I{i}", "kind": kind, "fresh": fresh} for i, kind in enumerate(kinds, 1)]
+
+
+def item_counts(items):
+    return Counter(item["kind"] for item in items)
 
 
 def write_json(path, obj):

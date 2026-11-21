@@ -10,11 +10,12 @@ cả hai chạy CÙNG một lớp sim, không nhân đôi logic.
 import math
 
 from .ids import IdAllocator
-from .inputs import InputPlayer
+from .inputs import BUTTONS_CORE, InputPlayer
 from .inventory import write_inventory
 from .jsonl import JsonlWriter
 from .rng import Streams
-from .sim.day import DaySim, build_gather
+from .sim.day import DaySim
+from .sim.gather import GatherSim
 from .sim.quan import QuanSim
 
 
@@ -23,7 +24,7 @@ def build_sim(mode, tuning, scenario, seed, inventory, days=1):
         return DaySim(tuning, scenario, seed, days)
     streams, ids = Streams(seed), IdAllocator()
     if mode == "gather":
-        return build_gather(tuning, scenario, streams, ids)
+        return GatherSim(tuning, scenario, streams, ids)
     return QuanSim(tuning, scenario, streams, ids, inventory=inventory)
 
 
@@ -108,7 +109,7 @@ class Session:
 
 def run(mode, tuning, scenario, seed, frames, ticks, out_path, snapshot_every, inventory=None, inventory_out=None, *, days=1):
     sess = Session(mode, tuning, scenario, seed, inventory, days=days)
-    player = InputPlayer(frames)
+    player = InputPlayer(frames, buttons=BUTTONS_CORE)
     w = JsonlWriter(out_path)
     try:
         for row in sess.initial_events():
