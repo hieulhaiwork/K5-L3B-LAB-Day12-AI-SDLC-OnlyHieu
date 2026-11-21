@@ -5,8 +5,8 @@
 | Thành viên | GitHub handle | Module chính | Vai quy trình | Người dự phòng cho |
 |---|---|---|---|---|
 |Lê Hiền Hiếu |hieulhaiwork | `sim/gather` |Team Lead / PO |sim/quan |
-| | | `sim/quan` |Developer / AI Harness |sim/gather |
-| | | `client/ui`, `qa` |Integrator / QA Lead / Scrum / Release |Kiểm thử và tích hợp hai module |
+|Đinh Lê Thịnh| ThinkLee04 | `sim/quan` |Developer / AI Harness |sim/gather |
+|Trần Thị Hồng Gấm| Honggam1109 | `client/ui`, `qa` |Integrator / QA Lead / Scrum / Release |Kiểm thử và tích hợp hai module |
 
 
 **Vai quy trình:** PO (đầu mối hỏi giảng viên, giữ `docs/clarify.md`) · Integrator (giữ `docs/contracts/`, gắn tag) · QA lead · Scrum/Release. Có thể kiêm.
