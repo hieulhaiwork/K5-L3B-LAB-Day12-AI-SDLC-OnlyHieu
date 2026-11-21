@@ -2,12 +2,12 @@
 
 import re
 
-_TAIL = re.compile(r"^(.*?)(\d+)$")
+_TAIL = re.compile(r"(.*?)([0-9]+)", re.DOTALL)
 
 
 def id_key(ident: str):
     """Khóa sắp: (tiền tố, hậu tố số hoặc -1, id gốc)."""
-    m = _TAIL.match(ident)
+    m = _TAIL.fullmatch(ident)
     if m:
         return (m.group(1), int(m.group(2)), ident)
     return (ident, -1, ident)
@@ -24,7 +24,7 @@ class IdAllocator:
         self._next = {}
 
     def reserve(self, ident: str):
-        m = _TAIL.match(ident)
+        m = _TAIL.fullmatch(ident)
         if m:
             prefix, n = m.group(1), int(m.group(2))
             self._next[prefix] = max(self._next.get(prefix, 1), n + 1)
