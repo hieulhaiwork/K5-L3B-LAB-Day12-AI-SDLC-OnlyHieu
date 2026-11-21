@@ -10,7 +10,7 @@ import sys
 from .contract import load_contract
 from .errors import BadInput
 from .inputs import load_frames
-from .inventory import read_inventory
+from .inventory import ingredient_kinds, read_inventory
 from .runner import run
 from .scenario import load_scenario
 
@@ -45,7 +45,7 @@ def main(argv=None) -> int:
     a = p.parse_args(argv)
     try:
         if a.mode == "day":
-            raise BadInput("--mode day chưa hỗ trợ ở contract v1.0 (có từ v1.1)")
+            raise BadInput("--mode day chưa được tích hợp")
         if a.ticks < 0:
             raise BadInput("--ticks phải >= 0")
         if a.snapshot_every <= 0:
@@ -63,7 +63,7 @@ def main(argv=None) -> int:
         tuning = contract["tuning"]
         scenario = load_scenario(a.scenario, a.mode, tuning)
         frames = load_frames(a.inputs)
-        inventory = read_inventory(a.inventory) if a.inventory else None
+        inventory = read_inventory(a.inventory, ingredient_kinds(tuning)) if a.inventory else None
         if inventory is not None and "stock" in scenario:
             raise BadInput("vừa có quan.stock vừa có --inventory")
     except BadInput as e:
