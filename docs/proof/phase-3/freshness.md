@@ -18,3 +18,11 @@ Kết quả **73/73 test qua** trên bản gộp khi rebase lên `main` tại `2
 - **Kiểm tra khi rebase.** Hai lượt headless seed `17` với cùng fixture tạo JSONL giống từng byte. Giữ E qua cập bến và pause giữ `sim_tick` cùng độ tươi trong thời gian pause. Chỉ lần nhấn E mới bắt đầu nấu tại tick 7. API live giữ màn mở quán và Shop, đồng thời bàn giao cá thể vừa ươn tại `phase_tick: 0`. Chạy các hàm dựng HTML bằng Node để xác nhận màn mở quán, HUD và Shop hiển thị độ tươi, đồng thời loại nguyên liệu đã giữ và hàng ươn khỏi kho khả dụng.
 
 Regression Phase 1–2 giữ lại kiểm tra gameplay và đổi fixture sang mảng cá thể. Ca cá lóc nấu sau khi đã hao tươi thu 59k tiền món và 11k boa. Test cấm `day` đã chuyển sang kiểm mode cũ `river`, vì `day` nay có CLI riêng.
+
+## Kiểm chứng TV3 trên main sau tích hợp
+
+Chạy trên `main` tại `ab3e92a` cùng thay đổi local của TV3, Windows và Python 3.12. Chạy `$env:PYTHONPATH = 'tests;.'` rồi `python -m unittest discover -s tests -q`: **85/85 test đạt**.
+
+- `--scenario` và `--inventory` trả mã `2` trước khi tạo JSONL với độ tươi âm, lớn hơn 100, không hữu hạn hoặc có số mũ mà bộ đọc không biểu diễn được. Trước khi sửa, trường hợp số mũ vượt miền làm cả hai đường đọc thoát mã `1` với traceback. [Test CLI](../../../tests/test_freshness_p3.py)
+- API live chuyển `I1` và `I2` sang Quán ở `phase_tick: 0`, stock khớp `gather_end`. `I1` dưới 30 theo số chính xác dù chuyển sang số JavaScript thành 30. API vẫn đánh dấu `I1` trong `spoiled_ids`. Kiểm với JavaScript, DOM/Canvas giả lập và HTTP thật xác nhận HUD hiển thị `Ươn`, loại `I1` khỏi kho khả dụng và hiển thị hàng ươn trong Shop. [Test live](../../../tests/test_live.py)
+- Hai lượt `python -m chonoi.headless --mode day --days 1 --seed 17 --ticks 22200 --out day.jsonl` dùng hai đường dẫn đầu ra tạm khác nhau. JSONL giống từng byte, kết thúc `days_complete` ở tick 22.200 trong khoảng 2,58 và 2,19 giây trên máy local.

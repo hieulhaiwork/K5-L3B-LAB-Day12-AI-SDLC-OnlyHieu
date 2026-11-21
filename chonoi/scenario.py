@@ -5,7 +5,7 @@ Kiểm cú pháp và phạm vi dữ liệu. QuanSim kiểm mâu thuẫn đơn h�
 
 import json
 import math
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from .day_plan import normalize_day_plan
 from .errors import BadInput
@@ -58,7 +58,7 @@ def load_scenario(path, mode: str, tuning: dict) -> dict:
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f, parse_float=Decimal, object_hook=_preserve_freshness)
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, InvalidOperation) as e:
         raise BadInput(f"không đọc được scenario {path}: {e}")
     allowed = {"gather", "quan", "day"} if mode == "day" else {mode}
     if not isinstance(data, dict) or set(data) - allowed:

@@ -3,7 +3,7 @@
 import json
 import os
 import tempfile
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from .errors import BadInput
 from .freshness import validate_individuals
@@ -42,7 +42,7 @@ def read_inventory(path: str, kinds=KINDS_P1, contract_version="1.1"):
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f, parse_float=Decimal)
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, InvalidOperation) as e:
         raise BadInput(f"không đọc được file kho {path}: {e}")
     if not isinstance(data, dict) or set(data.keys()) != {"items"}:
         raise BadInput("file kho chỉ được có khóa gốc 'items'")

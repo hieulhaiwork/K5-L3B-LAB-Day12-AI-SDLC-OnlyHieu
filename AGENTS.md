@@ -9,6 +9,7 @@
 - Kiểm thử lát quán Phase 2: `PYTHONPATH=tests:. python3 -m unittest discover -s tests -p 'test_quan_p*.py' -v`
 - Mở quán với kho mẫu: `python3 -m chonoi.live --mode quan --inventory docs/contracts/inventory.sample.json --port 0`
 - Chạy vòng ngày v1.2: `python3 -m chonoi.headless --mode day --days 1 --seed 17 --ticks 22200 --out out.jsonl`
+- Kiểm biên độ tươi v1.2: `PYTHONPATH=tests:. python3 -m unittest discover -s tests -p 'test_freshness_p3.py' -v`
 
 ## Cấu trúc & quy ước
 - (Starter Python là TÙY CHỌN; nhóm có thể dùng ngôn ngữ khác nếu giữ Test Contract.) Khung do giảng viên cấp: `chonoi/{headless,inputs,scenario,contract,rng,ids,jsonl,inventory,runner,live}.py` và `chonoi/web/`. Hạn chế sửa; nếu phải sửa thì báo cả nhóm và ghi lại lý do.
