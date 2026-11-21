@@ -10,6 +10,7 @@
 - Mở quán với kho mẫu: `python3 -m chonoi.live --mode quan --inventory docs/contracts/inventory.sample.json --port 0`
 - Chạy vòng ngày v1.2: `python3 -m chonoi.headless --mode day --days 1 --seed 17 --ticks 22200 --out out.jsonl`
 - Kiểm biên độ tươi v1.2: `PYTHONPATH=tests:. python3 -m unittest discover -s tests -p 'test_freshness_p3.py' -v`
+- Phase 4: `python3 -m tests.test_phase4 --browser docs/proof/phase-4`, `python3 -m chonoi.bench --seed 42 --duration 30 --out docs/proof/phase-4/bench.json` và `python3 -m chonoi.soak --seed 7 --days 10 --out docs/proof/phase-4/soak.json`. Hai lệnh Chromium cần Node.js 22+ và Chrome, Chromium hoặc Edge.
 
 ## Cấu trúc & quy ước
 - (Starter Python là TÙY CHỌN; nhóm có thể dùng ngôn ngữ khác nếu giữ Test Contract.) Khung do giảng viên cấp: `chonoi/{headless,inputs,scenario,contract,rng,ids,jsonl,inventory,runner,live}.py` và `chonoi/web/`. Hạn chế sửa; nếu phải sửa thì báo cả nhóm và ghi lại lý do.
@@ -34,3 +35,4 @@
 
 ## Skills / hooks của nhóm
 - [`phase-qa`](.agents/skills/phase-qa/SKILL.md): regression, kiểm bàn giao kho/vòng ngày và nối kết quả vào ma trận nghiệm thu.
+- [`contract-change`](.agents/skills/contract-change/SKILL.md): đổi luật, dữ liệu, schema hoặc thứ tự xử lý trong tick.

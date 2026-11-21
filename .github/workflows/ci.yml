@@ -9,7 +9,10 @@ jobs:
   # CI là TÙY CHỌN: nhóm dùng, sửa hay xóa file này đều được.
   test:
     name: ci / test
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,10 +21,31 @@ jobs:
       # Nhắc điền TEAM.md (cảnh báo, không chặn). Bỏ qua ở repo gốc của giảng viên (TEAM.md ở đó là bản mẫu).
       - name: Kiểm danh sách thành viên (cảnh báo)
         continue-on-error: true
-        if: github.repository != 'VinUni-AI20k/K5-L3B-LAB-Day12-AI-SDLC'
+        if: runner.os == 'Linux' && github.repository != 'VinUni-AI20k/K5-L3B-LAB-Day12-AI-SDLC'
         run: python3 tools/check_team.py
       # Nhóm đổi ngôn ngữ: sửa `build_cmd` trong game.contract.json và cài runtime ở bước riêng (xem README).
       - name: Build (build_cmd trong game.contract.json)
         run: bash -c "$(python3 -c 'import json;print(json.load(open("game.contract.json"))["build_cmd"])')"
       - name: Test (hộp đen qua headless_cmd + unit của nhóm)
         run: PYTHONPATH=tests:. python3 -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        if: runner.os == 'Linux'
+        with:
+          node-version: "22"
+      - name: Browser và benchmark Canvas
+        if: runner.os == 'Linux'
+        run: |
+          python3 -m tests.test_phase4 --browser artifacts/browser
+          python3 -m chonoi.bench --seed 42 --duration 30 --out artifacts/bench.json
+          python3 -m chonoi.soak --seed 7 --days 10 --out artifacts/soak.json
+      - name: Tạo gói phát hành
+        if: runner.os == 'Linux'
+        run: python3 tools/package_release.py
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: phase-4
+          path: |
+            artifacts/
+            dist/*.zip
+          if-no-files-found: error

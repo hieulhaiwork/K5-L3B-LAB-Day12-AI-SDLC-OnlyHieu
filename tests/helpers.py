@@ -5,6 +5,7 @@ import math
 import os
 import shlex
 import subprocess
+import sys
 import tempfile
 from collections import Counter
 
@@ -29,10 +30,17 @@ def frames(*fr):
     return {"frames": list(fr)}
 
 
-def headless_cmd():
-    """Lệnh headless khai trong game.contract.json — test chạy qua đây nên dùng được với MỌI ngôn ngữ."""
+def contract_command(key):
+    """Đọc lệnh khai trong manifest; Windows dùng Python chạy bộ test thay cho shim python3."""
     with open(os.path.join(ROOT, "game.contract.json"), encoding="utf-8") as f:
-        return shlex.split(json.load(f)["headless_cmd"])
+        command = shlex.split(json.load(f)[key])
+    if os.name == "nt" and command[0] == "python3":
+        command[0] = sys.executable
+    return command
+
+
+def headless_cmd():
+    return contract_command("headless_cmd")
 
 
 def run_headless(*args, cwd=ROOT):

@@ -199,6 +199,13 @@ class _Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # yên lặng
         pass
 
+    def handle(self):
+        try:
+            super().handle()
+        except ConnectionError:
+            # Chromium may close a keep-alive connection while polling or leaving.
+            pass
+
     def _send(self, code, body: bytes, ctype="application/json; charset=utf-8"):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
@@ -211,12 +218,14 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path == "/state":
             self._send(200, self.game.state_json())
-        elif path in ("/", "/index.html"):
+        elif path in ("/", "/index.html", "/pixel.js"):
+            name = "pixel.js" if path == "/pixel.js" else "index.html"
+            content_type = "text/javascript; charset=utf-8" if name.endswith(".js") else "text/html; charset=utf-8"
             try:
-                with open(os.path.join(WEB_DIR, "index.html"), "rb") as f:
-                    self._send(200, f.read(), "text/html; charset=utf-8")
+                with open(os.path.join(WEB_DIR, name), "rb") as f:
+                    self._send(200, f.read(), content_type)
             except OSError:
-                self._send(404, b'{"error":"thieu index.html"}')
+                self._send(404, b'{"error":"thieu tai nguyen giao dien"}')
         else:
             self._send(404, b'{"error":"khong co"}')
 

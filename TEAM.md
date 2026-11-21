@@ -24,3 +24,8 @@
 - Giờ standup giữa phase: Kiểm tra tiến độ ngắn trước mỗi checkpoint, báo cáo phần đã xong, phần còn thiếu và các blocker.
 - Cách đọc code của nhau (tùy chọn): Mỗi thành viên kiểm tra phần code liên quan của người khác trước khi tích hợp; ưu tiên review logic, Test Contract và các test bị ảnh hưởng.
 - Cách làm việc với Git: Mỗi người commit bằng tài khoản GitHub cá nhân, tối thiểu 3 commit có nội dung; chạy test trước khi tích hợp. Integrator chịu trách nhiệm gắn tag phase-1 đến phase-4 và tạo Release v1.0.0.
+
+## Phase 4
+
+- Bản tích hợp local gom lượt rà luật, UI, đóng gói, QA và bằng chứng theo yêu cầu bàn giao cuối. [Ma trận](docs/verification/phase-4.md)
+- PO rà các điểm làm rõ, thành viên xác nhận phản tư cá nhân, Integrator phát hành từ commit bàn giao đã chạy lại test. [Retro và bằng chứng đóng góp](docs/retro.md)
