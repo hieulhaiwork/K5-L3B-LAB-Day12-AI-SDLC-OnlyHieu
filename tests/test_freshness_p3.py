@@ -119,6 +119,24 @@ class FreshnessPhase3(unittest.TestCase):
                     self.assertEqual(code, 2)
                     self.assertFalse(os.path.exists(out))
 
+    def test_rejects_invalid_fresh_numbers_in_file_and_scenario(self):
+        with Workdir() as work:
+            source, out = work.path("input.json"), work.path("out.jsonl")
+            for fresh in ("-0.001", "100.001", "NaN", "1e1000", "1e99999999999999999999"):
+                item = '{"id":"I1","kind":"ca_linh","fresh":' + fresh + "}"
+                for mode, flag, content in (
+                    ("gather", "--scenario", '{"gather":{"hold":[' + item + "]}}"),
+                    ("quan", "--inventory", '{"items":[' + item + "]}"),
+                ):
+                    with self.subTest(fresh=fresh, flag=flag):
+                        with open(source, "w", encoding="utf-8") as f:
+                            f.write(content)
+                        code, err = run_headless("--mode", mode, "--seed", "17", "--ticks", "0", "--out", out,
+                                                 flag, source)
+                        self.assertEqual(code, 2, err)
+                        self.assertNotIn("Traceback", err)
+                        self.assertFalse(os.path.exists(out))
+
     def test_day_handoff_keeps_freshness_and_reissues_fixture_ids_next_day(self):
         with Workdir() as work:
             scenario = write_json(work.path("scenario.json"), {"day": {"money": 200, "earned": 200,

@@ -5,6 +5,7 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+from decimal import Decimal
 
 from chonoi.contract import load_contract
 from chonoi.live import LiveGame, LiveServer
@@ -56,6 +57,37 @@ class LiveServerTest(unittest.TestCase):
             server.stop()
         self.assertFalse(server.game._thread.is_alive())
         self.assertFalse(server._thread.is_alive())
+
+    def test_live_day_keeps_exact_spoil_status_when_float_rounds_to_30(self):
+        tuning = load_contract()["tuning"]
+        scenario = {"gather": {"time_left_ticks": 1, "random_fish": False, "monsters": [],
+                               "hold": [
+                                   {"id": "I1", "kind": "ca_loc", "fresh": Decimal("30.008333333333333333")},
+                                   {"id": "I2", "kind": "bong_sung", "fresh": Decimal("30.00834")},
+                               ]}}
+        server = LiveServer(LiveGame("day", tuning, scenario, 17, days=1), port=0)
+        server.start()
+        try:
+            base = server.url.rstrip("/")
+            self.assertEqual(_post(base + "/restart", {}), 200)
+            opening = json.loads(_get(base + "/state")[1], parse_float=Decimal)
+            self.assertEqual(opening["meta"]["spoiled_ids"], [])
+            self.assertEqual(_post(base + "/input", {"interact": True}), 200)
+            self.assertEqual(_post(base + "/input", {"interact": False}), 200)
+            evening = opening
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline and evening["ui"]["screen"] != "evening_intro":
+                evening = json.loads(_get(base + "/state")[1], parse_float=Decimal)
+                time.sleep(0.01)
+            self.assertEqual((evening["ui"]["screen"], evening["phase_tick"]), ("evening_intro", 0))
+            ended = next(event for event in evening["events"] if event["name"] == "gather_end")
+            self.assertEqual(evening["stock"], ended["data"]["inventory"]["items"])
+            self.assertLess(evening["stock"][0]["fresh"], Decimal(30))
+            self.assertEqual(float(evening["stock"][0]["fresh"]), 30.0)
+            self.assertGreater(evening["stock"][1]["fresh"], Decimal(30))
+            self.assertEqual(evening["meta"]["spoiled_ids"], ["I1"])
+        finally:
+            server.stop()
 
 
 if __name__ == "__main__":
